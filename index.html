@@ -9,7 +9,9 @@
 	<style type="text/css">
 
 		body {
-			margin-top: 80px;
+			width: 1246px;
+			margin: 80px auto;
+			text-align: center;
 			font-family: monospace;
 			font-size: 1.25em;
 		}
@@ -35,34 +37,11 @@
 
 		#loading #fill {
 			position: absolute;
-			top: 0px;
-			left: 0px;
+			top: 0;
+			left: 0;
 			height: 100%;
-			width: 0%;
+			width: 0;
 			background-color: blue;
-		}
-
-		button {
-			border: 1px solid black;
-			display: block;
-			position: relative;
-			text-align: center;
-			width: 160px;
-			height: 50px;
-			pointer-events: none;
-			opacity: 0.5;
-			margin-left: auto;
-			margin-right: auto;
-			background-color: white;
-		}
-
-		button:hover {
-			background-color: #f0f;
-		}
-
-		button.active {
-			pointer-events: initial;
-			opacity: 1;
 		}
 
 		.description {
@@ -78,11 +57,12 @@
 		}
 
 		h3 {
-			margin-top: 0px;
+			margin-top: 0;
 		}
 
 		#piano {
 			width: 1246px;
+			margin: 0 auto;
 			position: relative;
 			background: #444;
 		}
@@ -124,15 +104,32 @@
 			background: green;
 		}
 
+		#play {
+			width: 1236px;
+			margin: 10px auto 0;
+			cursor: pointer;
+			display: block;
+			padding: 5px;
+		}
+
+		#chord {
+			width: 7em;
+			font-size: inherit;
+		}
+
 	</style>
 
 	<div id='loading'>
 		<div id='fill'></div>
 	</div>
 
+	<h2><input id="chord"> <button id="save">Save</button></h2>
+
 	<div id="piano">
 		<div class="white"></div>
 		<div class="black"></div>
 	</div>
+
+	<button id="play">play</button>
 </body>
 </html>

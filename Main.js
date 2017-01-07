@@ -5,27 +5,38 @@ import Buffer from 'Tone/core/Buffer'
 var piano = new Piano([21, 108], 5).toMaster();
 
 piano.load('./Salamander/').then(() => {
-	//if (location.hash) {
-	//	notes = location.hash.replace(/^#/, '').split(',');
-	//}
-	//
-	//play();
+	//#n=41,48,55,60,51,58&c=F11
+	var m = location.hash.match(/n=([\d,]+)&c=(.*)/);
+	if (m) {
+		m[1].split(',').forEach((note) => {
+			document.querySelector('[data-note="' + note + '"]').classList.add('active');
+		});
+		document.querySelector('#chord').value = m[2];
+	}
 });
+
+function getNotes() {
+	var notes = [];
+
+	document.querySelectorAll('[data-note].active').forEach((el) => {
+		notes.push(parseInt(el.dataset.note, 10));
+	});
+
+	return notes;
+}
 
 function play() {
 
-	var i, actives = document.querySelectorAll('[data-note].active');
+	var notes = getNotes();
 
-	for (i = 0; i < actives.length; i++) {
-		var note = parseInt(actives[i].dataset.note, 10);
+	notes.forEach((note) => {
 		piano.keyDown(note);
-	}
+	});
 
 	setTimeout(() => {
-		for (i = 0; i < actives.length; i++) {
-			var note = parseInt(actives[i].dataset.note, 10);
+		notes.forEach((note) => {
 			piano.keyUp(note);
-		}
+		});
 	}, 2000);
 }
 
@@ -70,7 +81,7 @@ if (navigator.requestMIDIAccess) {
 window.addEventListener('DOMContentLoaded', () => {
 	var whites = '', blacks = '', note, mod, left = 36;
 
-	for (note = 24; note < 85; note++) {
+	for (note = 36; note < 97; note++) {
 		mod = note % 12;
 		if (mod == 1 || mod == 3 || mod == 6 || mod == 8 || mod == 10) {
 			blacks += '<div data-note=' + note + ' style="left:' + left + 'px"></div>';
@@ -95,5 +106,19 @@ window.addEventListener('click', (e) => {
 			e.target.classList.add('active');
 		}
 		play();
+		return false;
+	}
+
+	if (e.target.id == 'play') {
+		play();
+		return false;
+	}
+
+	if (e.target.id == 'save') {
+		var chord = document.querySelector('#chord').value;
+		var notes = getNotes();
+
+		location.hash = '#n=' + notes.join(',') + '&c=' + encodeURIComponent(chord);
+		location.reload();
 	}
 });
