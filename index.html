@@ -16,16 +16,6 @@
 			font-size: 1.25em;
 		}
 
-		a {
-			text-decoration: none;
-			font-weight: bold;
-			color: black;
-		}
-
-		a:hover {
-			color: blue;
-		}
-
 		#loading {
 			position: absolute;
 			top: 20px;
@@ -92,24 +82,33 @@
 		.black div {
 			position: absolute;
 			top: 0;
-			width: 20px;
+			width: 16px;
 			height: 100px;
+			border: 2px solid #000;
 			-moz-border-radius: 0 0 5px 5px;
 			-webkit-border-radius: 0 0 5px 5px;
 			border-radius: 0 0 5px 5px;
 			background: #000;
 			color: #fff;
 		}
+		[data-note] {
+			cursor: pointer;
+		}
 		[data-note].active {
-			background: green;
+			background: #74c674;
 		}
 
-		#play {
-			width: 1236px;
-			margin: 10px auto 0;
+		.controls {
+			margin: 10px;
+		}
+		.controls button {
+			font-size: 20px;
 			cursor: pointer;
-			display: block;
 			padding: 5px;
+			margin-right: 5px;
+		}
+		#play {
+			width: 600px;
 		}
 
 		#chord {
@@ -130,6 +129,9 @@
 		<div class="black"></div>
 	</div>
 
-	<button id="play">play</button>
+	<section class="controls">
+		<button id="play">play</button> <button id="stop">stop</button>
+	</section>
+
 </body>
 </html>
