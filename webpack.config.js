@@ -12,6 +12,7 @@ module.exports = {
 		filename: './build/[name].js',
 		chunkFilename: './build/[id].js',
 		sourceMapFilename : '[file].map',
+		publicPath: '/local/Piano',
 		// library : 'Piano',
 		// libraryTarget : 'umd'
 	},
