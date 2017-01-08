@@ -1,5 +1,4 @@
 import Piano from 'Piano'
-//import Master from 'Tone/core/Master'
 import Buffer from 'Tone/core/Buffer'
 
 var RANGE = [36, 96];
@@ -52,17 +51,6 @@ function toggleKey(value, playAfter = true) {
 	}
 	playAfter && playAll();
 }
-
-/**
- *  LOADING BAR
- */
-Buffer.on('progress', (prog) => {
-	document.querySelector('#loading #fill').style.width = (prog * 100).toString() + '%';
-});
-
-Buffer.on('load', (prog) => {
-	document.querySelector('#loading').remove();
-});
 
 /**
  *  MIDI INPUT
