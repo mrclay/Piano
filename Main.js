@@ -15,6 +15,7 @@ piano.load('./Salamander/').then(() => {
 			toggleKey(note, false);
 		});
 		document.querySelector('#chord').value = decodeURIComponent(m[2]);
+		document.querySelector('title').textContent = decodeURIComponent(m[2]);
 	}
 });
 
@@ -98,13 +99,13 @@ window.addEventListener('DOMContentLoaded', () => {
 	for (note = RANGE[0]; note <= RANGE[1]; note++) {
 		mod = note % 12;
 		if (mod == 1 || mod == 3 || mod == 6 || mod == 8 || mod == 10) {
-			blacks += '<div data-note=' + note + ' style="left:' + left + 'px"></div>';
+			blacks += '<a href="#" data-note=' + note + ' style="left:' + left + 'px"></a>';
 			left += 34;
 			if (mod == 3 || mod == 10) {
 				left += 34;
 			}
 		} else {
-			whites += '<div data-note=' + note + '></div>';
+			whites += '<a href="#" data-note=' + note + '></a>';
 		}
 	}
 
