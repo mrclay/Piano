@@ -12,7 +12,7 @@ module.exports = {
 		filename: './build/[name].js',
 		chunkFilename: './build/[id].js',
 		sourceMapFilename : '[file].map',
-		publicPath: '/chord',
+		publicPath: PROD ? '/chord' : '/local/chord',
 		// library : 'Piano',
 		// libraryTarget : 'umd'
 	},

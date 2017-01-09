@@ -7,6 +7,8 @@ var USE_RELEASE = false;
 
 var piano = new Piano(RANGE, VELOCITIES, USE_RELEASE).toMaster();
 var playingNotes = [];
+var $one = document.querySelector.bind(document);
+var $all = document.querySelectorAll.bind(document);
 
 piano.load('./Salamander/').then(() => {
 	var m = location.hash.match(/n=([\d,]+)&c=(.*)/);
@@ -14,14 +16,14 @@ piano.load('./Salamander/').then(() => {
 		m[1].split(',').forEach((note) => {
 			toggleKey(note, false);
 		});
-		document.querySelector('#chord').value = decodeURIComponent(m[2]);
-		document.querySelector('title').textContent = decodeURIComponent(m[2]);
+		$one('#chord').value = decodeURIComponent(m[2]);
+		$one('title').textContent = decodeURIComponent(m[2]);
 	}
 });
 
 function getDepressedKeys() {
 	var notes = [];
-	document.querySelectorAll('[data-note].active').forEach((el) => {
+	$all('[data-note].active').forEach((el) => {
 		notes.push(parseInt(el.dataset.note, 10));
 	});
 	return notes;
@@ -44,7 +46,7 @@ function stopAll() {
 }
 
 function toggleKey(value, playAfter = true) {
-	var el = document.querySelector('[data-note="' + value + '"]');
+	var el = $one('[data-note="' + value + '"]');
 	if (el.classList.contains('active')) {
 		el.classList.remove('active');
 	} else {
@@ -69,23 +71,24 @@ if (navigator.requestMIDIAccess) {
 }
 
 window.addEventListener('click', (e) => {
-	if (e.target.dataset.note) {
-		toggleKey(e.target.dataset.note);
+	var target = e.target;
+	if (target.dataset.note) {
+		toggleKey(target.dataset.note);
 		return false;
 	}
 
-	if (e.target.id == 'play') {
+	if (target.id == 'play') {
 		playAll();
 		return false;
 	}
 
-	if (e.target.id == 'stop') {
+	if (target.id == 'stop') {
 		stopAll();
 		return false;
 	}
 
-	if (e.target.id == 'save') {
-		var chord = document.querySelector('#chord').value;
+	if (target.id == 'save') {
+		var chord = $one('#chord').value;
 		var notes = getDepressedKeys();
 
 		location.hash = '#n=' + notes.join(',') + '&c=' + encodeURIComponent(chord);
@@ -109,6 +112,6 @@ window.addEventListener('DOMContentLoaded', () => {
 		}
 	}
 
-	document.querySelector('.white').innerHTML = whites;
-	document.querySelector('.black').innerHTML = blacks;
+	$one('.white').innerHTML = whites;
+	$one('.black').innerHTML = blacks;
 });
