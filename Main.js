@@ -10,7 +10,7 @@ var playingNotes = [];
 var $one = document.querySelector.bind(document);
 var $all = document.querySelectorAll.bind(document);
 
-piano.load('./Salamander/').then(() => {
+piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(() => {
 	var m = location.hash.match(/n=([\d,]+)&c=(.*)/);
 	if (m) {
 		m[1].split(',').forEach((note) => {
