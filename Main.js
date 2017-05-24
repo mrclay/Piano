@@ -55,6 +55,23 @@ function toggleKey(value, playAfter = true) {
 	playAfter && playAll();
 }
 
+function save() {
+	var chord = $one('#chord').value;
+	var notes = getDepressedKeys();
+
+	location.hash = '#n=' + notes.join(',') + '&c=' + encodeURIComponent(chord);
+	location.reload();
+}
+
+function reset() {
+	stopAll();
+	$all('[data-note].active').forEach((el) => {
+		el.classList.remove('active');
+	});
+	location.hash = '';
+	$one('#chord').value = '';
+}
+
 /**
  *  MIDI INPUT
  */
@@ -88,11 +105,13 @@ window.addEventListener('click', (e) => {
 	}
 
 	if (target.id == 'save') {
-		var chord = $one('#chord').value;
-		var notes = getDepressedKeys();
+		save();
+		return false;
+	}
 
-		location.hash = '#n=' + notes.join(',') + '&c=' + encodeURIComponent(chord);
-		location.reload();
+	if (target.id == 'reset') {
+		reset();
+		return false;
 	}
 });
 
