@@ -4,6 +4,13 @@ body {
 	margin: 50px auto;
 }
 
+h1 {
+	font-style: italic;
+}
+h1.unsaved {
+	color: #ccc;
+}
+
 #piano {
 	width: 1246px;
 	margin: 0 auto;

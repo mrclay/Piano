@@ -137,7 +137,7 @@ function stopAll() {
 }
 
 function getHash() {
-	const title = $one('#title').value;
+	const title = getTitle();
 
 	const encoded = operations.map((el) => {
 		return encodeOp(el[0], el[1]);
@@ -151,9 +151,18 @@ function getHash() {
 	return hash;
 }
 
+function getTitle() {
+	return $one('#title').value;
+}
+
 function save() {
 	location.hash = getHash();
-	//location.reload();
+
+	const title = getTitle();
+	if (title) {
+		$one('h1').textContent = '“' + title + '”';
+		$one('h1').classList.remove('unsaved');
+	}
 }
 
 function load() {
@@ -178,8 +187,9 @@ function load() {
 
 	if (titleEncoded) {
 		$one('#title').value = decodeURIComponent(titleEncoded);
-		$one('title').textContent = decodeURIComponent(titleEncoded);
+		$one('h1').textContent = '“' + decodeURIComponent(titleEncoded) + '”';
 	}
+	$one('h1').classList.remove('unsaved');
 
 	$one('body').classList.remove('loading');
 	setState(STOPPED);
