@@ -47,11 +47,7 @@ function init() {
 		operations.push([opTime[0], opTime[1]]);
 	}
 
-	if (title) {
-		$one('#title').value = title;
-		$one('h1').textContent = '“' + title + '”';
-	}
-	$one('h1').classList.remove('unsaved');
+	title && setTitle(title);
 
 	$one('body').classList.remove('loading');
 	setState(STOPPED);
@@ -186,13 +182,32 @@ function getTitle() {
 }
 
 function save() {
+	setState(STOPPED);
 	location.hash = getHash();
 
 	const title = getTitle();
+	title && setTitle(title);
+}
+
+function setTitle(title) {
 	if (title) {
+		$one('#title').value = title;
 		$one('h1').textContent = '“' + title + '”';
 		$one('h1').classList.remove('unsaved');
+	} else {
+		$one('#title').value = '';
+		$one('h1').textContent = '“Untitled”';
+		$one('h1').classList.add('unsaved');
 	}
+}
+
+function reset() {
+	stopAll();
+	location.hash = '#';
+	firstTime = undefined;
+	operations = [];
+	setTitle('');
+	setState(RECORDING);
 }
 
 /**
@@ -327,6 +342,11 @@ window.addEventListener('click', (e) => {
 
 	if (target.id == 'save') {
 		save();
+		return false;
+	}
+
+	if (target.id == 'reset') {
+		reset();
 		return false;
 	}
 });
