@@ -4,40 +4,76 @@ import Buffer from 'Tone/core/Buffer'
 const RANGE = [36, 96];
 const VELOCITIES = 1;
 const USE_RELEASE = false;
-
-const ORD_ZERO = '0'.charCodeAt(0);
+const TIME_RESOLUTION_DIVISOR = 4;
 const ORD_A_UPPER = 'A'.charCodeAt(0);
-const ORD_A_LOWER = 'a'.charCodeAt(0);
+
+const STOPPED = 'stopped';
+const RECORDING = 'recording';
+const PLAYING = 'playing';
 
 const piano = new Piano(RANGE, VELOCITIES, USE_RELEASE).toMaster();
 const $one = document.querySelector.bind(document);
+const $all = document.querySelectorAll.bind(document);
 
+var state = STOPPED;
 var firstTime;
 var operations = [];
 var keyTimeouts = {};
+var playAllIntervals = [];
+var progressInterval;
 
-piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(() => {
-	var m = location.hash.match(/s=(\w+)(&c=(.*))?/);
-	if (!m) {
-		return;
+setState(STOPPED);
+
+piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(load);
+
+function setState(newState) {
+	// reset UI to stopped state
+	stopAll();
+	$one('#record').classList.remove('active');
+	$one('#stop').style.display = 'none';
+	$one('#play').style.display = '';
+	if (operations.length) {
+		$one('#record span').innerHTML = 'Re-record';
+		$one('#play').classList.remove('disabled');
+		setProgress(1);
+	} else {
+		$one('#record span').innerHTML = 'Record';
+		$one('#play').classList.add('disabled');
+		setProgress(0);
 	}
 
-	const streamEncoded = m[1];
-	const titleEncoded = m[2];
+	switch (newState) {
+		case RECORDING:
+			operations = [];
+			firstTime = undefined;
+			$one('#record').classList.add('active');
+			$one('#play').style.display = 'none';
+			$one('#stop').style.display = '';
+			break;
 
-	var pattern = /[A-Z][a-z0-9]+/g,
-		token;
+		case STOPPED:
+			break;
 
-	while (token = pattern.exec(streamEncoded)) {
-		var opTime = decodeOp(token[0]);
-		addOperation(opTime[0], opTime[1]);
+		case PLAYING:
+			if (!operations.length) {
+				return setState(STOPPED);
+			}
+			playAll();
+			$one('#play').style.display = 'none';
+			$one('#stop').style.display = '';
+			break;
 	}
 
-	if (titleEncoded) {
-		$one('#title').value = decodeURIComponent(titleEncoded);
-		$one('title').textContent = decodeURIComponent(titleEncoded);
-	}
-});
+	state = newState;
+	$one('body').dataset.state = newState;
+}
+
+function setProgress(ratio) {
+	const el = $one('#progress');
+	el.style.width = (100 * ratio) + '%';
+	el.setAttribute('aria-valuenow', Math.round(100 * ratio));
+	$one('#progress .progress-percentage').innerHTML = Math.round(100 * ratio);
+}
 
 function encodeOp(op, time) {
 	return [
@@ -56,28 +92,89 @@ function decodeOp(token) {
 }
 
 function playAll() {
+	const numOperations = operations.length;
+	const lastTime = operations[operations.length - 1][1] * TIME_RESOLUTION_DIVISOR;
+	const startTime = (new Date).getTime();
+	var numPerformed = 0;
+
+	progressInterval = setInterval(() => {
+		const now = (new Date).getTime();
+		setProgress((now - startTime) / lastTime);
+	}, 20);
+
 	operations.forEach((el) => {
 		// relying on the timer is awful, but Piano's "time" arguments just don't work.
-		setTimeout(() => {
-			performOperation(el[0]);
-		}, el[1]);
+		playAllIntervals.push(
+			setTimeout(() => {
+					performOperation(el[0]);
+					numPerformed++;
+					if (numPerformed === numOperations) {
+						setState(STOPPED);
+					}
+				},
+				el[1] * TIME_RESOLUTION_DIVISOR
+			)
+		);
 	});
 }
 
-function save() {
-	var title = $one('#title').value;
+function stopAll() {
+	if (progressInterval) {
+		clearInterval(progressInterval);
+	}
+	playAllIntervals.forEach(clearTimeout);
+	$all('[data-note].active').forEach((el) => {
+		const note = parseInt(el.dataset.note, 10);
+		piano.keyUp(note);
+		el.classList.remove('active');
+	});
+	playAllIntervals = [];
+}
 
-	var encoded = operations.map((el) => {
+function getHash() {
+	const title = $one('#title').value;
+
+	const encoded = operations.map((el) => {
 		return encodeOp(el[0], el[1]);
 	}).join('');
 
-	location.hash = '#s=' + encoded + '&c=' + encodeURIComponent(title);
-	location.reload();
+	var hash = '#s=' + encoded;
+	if (title) {
+		hash += '&t=' + encodeURIComponent(title);
+	}
+
+	return hash;
 }
 
-function reset() {
-	operations = [];
-	firstTime = undefined;
+function save() {
+	location.hash = getHash();
+	//location.reload();
+}
+
+function load() {
+	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
+	if (!m) {
+		return;
+	}
+
+	const streamEncoded = m[1];
+	const titleEncoded = m[2];
+	const pattern = /[A-Z][a-z0-9]+/g;
+	var token;
+
+	while (token = pattern.exec(streamEncoded)) {
+		var opTime = decodeOp(token[0]);
+
+		firstTime = 0;
+		operations.push([opTime[0], opTime[1]]);
+	}
+
+	if (titleEncoded) {
+		$one('#title').value = decodeURIComponent(titleEncoded);
+		$one('title').textContent = decodeURIComponent(titleEncoded);
+	}
+
+	setState(STOPPED);
 }
 
 /**
@@ -87,7 +184,7 @@ if (navigator.requestMIDIAccess) {
     navigator.requestMIDIAccess().then((midiAccess) => {
     	midiAccess.inputs.forEach((input) => {
     		input.addEventListener('midimessage', (e) => {
-				var op = operationFromMidi(e.data);
+				const op = operationFromMidi(e.data);
 				if (!op) {
 					return;
 				}
@@ -110,9 +207,9 @@ const PEDAL_NOTE = 64;
 const RELEASE_VELOCITY = 0;
 
 function operationFromMidi(data) {
-	const op = data[0],
-		note = data[1],
-		velocity = data[2];
+	const op = data[0];
+	const note = data[1];
+	const velocity = data[2];
 
 	if (op === PEDAL_OPERATION && note === PEDAL_NOTE) {
 		return (velocity > 0) ? [OP_PEDAL_DOWN, 0] : [OP_PEDAL_UP, 0];
@@ -145,20 +242,29 @@ function performOperation(op) {
 	}
 }
 
-function addOperation(op, time) {
-	if (firstTime === undefined) {
-		firstTime = time;
+function addOperation(op, timeInMs) {
+	if (state !== RECORDING) {
+		return;
 	}
-	operations.push([op, (time - firstTime)]);
+
+	timeInMs = Math.round(timeInMs / TIME_RESOLUTION_DIVISOR);
+	if (firstTime === undefined) {
+		firstTime = timeInMs;
+	}
+	operations.push([op, (timeInMs - firstTime)]);
 }
 
 window.addEventListener('click', (e) => {
 	var target = e.target;
-	var op;
-	var note;
+
+	if (target.parentNode.nodeName === 'BUTTON') {
+		target = target.parentNode;
+	}
 
 	if (target.dataset.note) {
-		note = parseInt(target.dataset.note);
+		e.preventDefault();
+		const note = parseInt(target.dataset.note);
+		var op;
 
 		if (keyTimeouts['z' + note]) {
 			clearTimeout(keyTimeouts['z' + note]);
@@ -187,22 +293,22 @@ window.addEventListener('click', (e) => {
 	}
 
 	if (target.id == 'play') {
-		playAll();
+		setState(PLAYING);
 		return false;
 	}
 
 	if (target.id == 'stop') {
-		stopAll();
+		setState(STOPPED);
+		return false;
+	}
+
+	if (target.id == 'record') {
+		setState(RECORDING);
 		return false;
 	}
 
 	if (target.id == 'save') {
 		save();
-		return false;
-	}
-
-	if (target.id == 'reset') {
-		reset();
 		return false;
 	}
 });

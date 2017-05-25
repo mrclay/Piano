@@ -49,23 +49,28 @@ body {
 	background: #74c674;
 }
 
-.controls {
-	margin: 10px;
-}
-
-button {
-	font-size: 20px;
-	cursor: pointer;
-	padding: 5px;
-	margin-right: 5px;
-	font-weight: 300;
-}
-
-#play {
+section {
+	margin: 20px auto;
 	width: 600px;
+}
+
+#play, #stop {
+	width: 300px;
+}
+
+[data-state="recording"] #record {
+	background: #600;
 }
 
 #chord {
 	width: 7em;
 	font-size: inherit;
 }
+
+.progress-bar {
+	-webkit-transition: none;
+	-moz-transition: none;
+	-ms-transition: none;
+	-o-transition: none;
+	transition: none;
+}​
