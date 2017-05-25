@@ -25,7 +25,37 @@ var keyTimeouts = {};
 var playAllIntervals = [];
 var progressInterval;
 
-piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(load);
+piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(init);
+
+function init() {
+	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
+	if (!m) {
+		$one('body').classList.remove('loading');
+		setState(RECORDING);
+		return;
+	}
+
+	const streamEncoded = m[1];
+	const title = decodeURIComponent(m[2]);
+	const pattern = /[A-Z][a-z0-9]+/g;
+	var token;
+
+	while (token = pattern.exec(streamEncoded)) {
+		var opTime = decodeOp(token[0]);
+
+		firstTime = 0;
+		operations.push([opTime[0], opTime[1]]);
+	}
+
+	if (title) {
+		$one('#title').value = title;
+		$one('h1').textContent = '“' + title + '”';
+	}
+	$one('h1').classList.remove('unsaved');
+
+	$one('body').classList.remove('loading');
+	setState(STOPPED);
+}
 
 function setState(newState) {
 	// reset UI to stopped state
@@ -163,36 +193,6 @@ function save() {
 		$one('h1').textContent = '“' + title + '”';
 		$one('h1').classList.remove('unsaved');
 	}
-}
-
-function load() {
-	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
-	if (!m) {
-		$one('body').classList.remove('loading');
-		setState(RECORDING);
-		return;
-	}
-
-	const streamEncoded = m[1];
-	const titleEncoded = m[2];
-	const pattern = /[A-Z][a-z0-9]+/g;
-	var token;
-
-	while (token = pattern.exec(streamEncoded)) {
-		var opTime = decodeOp(token[0]);
-
-		firstTime = 0;
-		operations.push([opTime[0], opTime[1]]);
-	}
-
-	if (titleEncoded) {
-		$one('#title').value = decodeURIComponent(titleEncoded);
-		$one('h1').textContent = '“' + decodeURIComponent(titleEncoded) + '”';
-	}
-	$one('h1').classList.remove('unsaved');
-
-	$one('body').classList.remove('loading');
-	setState(STOPPED);
 }
 
 /**
