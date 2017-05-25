@@ -14,6 +14,9 @@ const PLAYING = 'playing';
 const piano = new Piano(RANGE, VELOCITIES, USE_RELEASE).toMaster();
 const $one = document.querySelector.bind(document);
 const $all = document.querySelectorAll.bind(document);
+const $record = $one('#record');
+const $play = $one('#play');
+const $stop = $one('#stop');
 
 var state = STOPPED;
 var firstTime;
@@ -22,23 +25,23 @@ var keyTimeouts = {};
 var playAllIntervals = [];
 var progressInterval;
 
-setState(STOPPED);
-
 piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(load);
 
 function setState(newState) {
 	// reset UI to stopped state
 	stopAll();
-	$one('#record').classList.remove('active');
-	$one('#stop').style.display = 'none';
-	$one('#play').style.display = '';
+	$record.classList.remove('active');
+	$record.classList.remove('disabled');
+	$stop.style.display = 'none';
+	$play.style.display = '';
+
 	if (operations.length) {
 		$one('#record span').innerHTML = 'Re-record';
-		$one('#play').classList.remove('disabled');
+		$play.classList.remove('disabled');
 		setProgress(1);
 	} else {
 		$one('#record span').innerHTML = 'Record';
-		$one('#play').classList.add('disabled');
+		$play.classList.add('disabled');
 		setProgress(0);
 	}
 
@@ -46,9 +49,11 @@ function setState(newState) {
 		case RECORDING:
 			operations = [];
 			firstTime = undefined;
-			$one('#record').classList.add('active');
-			$one('#play').style.display = 'none';
-			$one('#stop').style.display = '';
+			$record.classList.add('active');
+			$record.classList.add('disabled');
+			$one('#record span').innerHTML = 'Recording...';
+			$play.style.display = 'none';
+			$stop.style.display = '';
 			break;
 
 		case STOPPED:
@@ -59,8 +64,8 @@ function setState(newState) {
 				return setState(STOPPED);
 			}
 			playAll();
-			$one('#play').style.display = 'none';
-			$one('#stop').style.display = '';
+			$play.style.display = 'none';
+			$stop.style.display = '';
 			break;
 	}
 
@@ -154,6 +159,8 @@ function save() {
 function load() {
 	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
 	if (!m) {
+		$one('body').classList.remove('loading');
+		setState(RECORDING);
 		return;
 	}
 
@@ -174,6 +181,7 @@ function load() {
 		$one('title').textContent = decodeURIComponent(titleEncoded);
 	}
 
+	$one('body').classList.remove('loading');
 	setState(STOPPED);
 }
 
