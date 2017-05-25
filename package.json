@@ -20,6 +20,6 @@
     "raw-loader": "*",
     "tone": "^0.8.0",
     "url-loader": "*",
-    "webpack": "*"
+    "webpack": "1.*"
   }
 }

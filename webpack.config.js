@@ -1,6 +1,6 @@
 const webpack = require('webpack');
 
-var PROD = process.argv.indexOf('-p') !== -1
+var PROD = process.argv.indexOf('-p') !== -1;
 
 module.exports = {
 	context: __dirname,
@@ -12,7 +12,7 @@ module.exports = {
 		filename: './build/[name].js',
 		chunkFilename: './build/[id].js',
 		sourceMapFilename : '[file].map',
-		publicPath: PROD ? '/chord' : '/local/chord',
+		publicPath: PROD ? '/piano' : '/local/piano',
 		// library : 'Piano',
 		// libraryTarget : 'umd'
 	},
