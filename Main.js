@@ -1,5 +1,5 @@
-import Piano from 'Piano'
-import Buffer from 'Tone/core/Buffer'
+import Piano from 'Piano';
+import Buffer from 'Tone/core/Buffer';
 
 const RANGE = [36, 96];
 const VELOCITIES = 1;
@@ -8,8 +8,25 @@ const TIME_RESOLUTION_DIVISOR = 4;
 const ORD_A_UPPER = 'A'.charCodeAt(0);
 
 const STOPPED = 'stopped';
-const RECORDING = 'recording';
+const NEW_RECORDING = 'new_recording';
 const PLAYING = 'playing';
+
+const OP_PEDAL_DOWN = 0;
+const OP_PEDAL_UP = 1;
+const OP_NOTE_DOWN = 2;
+const OP_NOTE_UP = 3;
+
+// http://www.midimountain.com/midi/midi_status.htm
+const MIDI0_NOTE_ON = 144;
+const MIDI0_NOTE_OFF = 128;
+const MIDI0_PEDAL = 176;
+const MIDI0_L1 = 252; // L1 button on Edirol GM2
+const MIDI0_TUNE = 176; // TODO use for metronome?
+
+const MIDI1_PEDAL = 64;
+const MIDI1_TUNE = 10;
+
+const MIDI2_RELEASE_VELOCITY = 0;
 
 const piano = new Piano(RANGE, VELOCITIES, USE_RELEASE).toMaster();
 const $one = document.querySelector.bind(document);
@@ -25,13 +42,15 @@ var keyTimeouts = {};
 var playAllIntervals = [];
 var progressInterval;
 
+window.logMidi = false;
+
 piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(init);
 
 function init() {
 	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
 	if (!m) {
 		$one('body').classList.remove('loading');
-		setState(RECORDING);
+		setState(NEW_RECORDING);
 		return;
 	}
 
@@ -72,7 +91,7 @@ function setState(newState) {
 	}
 
 	switch (newState) {
-		case RECORDING:
+		case NEW_RECORDING:
 			operations = [];
 			firstTime = undefined;
 			$record.classList.add('active');
@@ -206,52 +225,23 @@ function reset() {
 	firstTime = undefined;
 	operations = [];
 	setTitle('');
-	setState(RECORDING);
+	setState(NEW_RECORDING);
 }
-
-/**
- *  MIDI INPUT
- */
-if (navigator.requestMIDIAccess) {
-    navigator.requestMIDIAccess().then((midiAccess) => {
-    	midiAccess.inputs.forEach((input) => {
-    		input.addEventListener('midimessage', (e) => {
-				const op = operationFromMidi(e.data);
-				if (!op) {
-					return;
-				}
-				addOperation(op, e.timeStamp);
-				performOperation(op);
-    		})
-    	});
-    });
-}
-
-const OP_PEDAL_DOWN = 0;
-const OP_PEDAL_UP = 1;
-const OP_NOTE_DOWN = 2;
-const OP_NOTE_UP = 3;
-
-const ATTACK_OPERATION = 144;
-const RELEASE_OPERATION = 128;
-const PEDAL_OPERATION = 176;
-const PEDAL_NOTE = 64;
-const RELEASE_VELOCITY = 0;
 
 function operationFromMidi(data) {
 	const op = data[0];
 	const note = data[1];
 	const velocity = data[2];
 
-	if (op === PEDAL_OPERATION && note === PEDAL_NOTE) {
+	if (op === MIDI0_PEDAL && note === MIDI1_PEDAL) {
 		return (velocity > 0) ? [OP_PEDAL_DOWN, 0] : [OP_PEDAL_UP, 0];
 
-	} else if (op === RELEASE_OPERATION || velocity === RELEASE_VELOCITY) {
+	} else if (op === MIDI0_NOTE_OFF || velocity === MIDI2_RELEASE_VELOCITY) {
 		if (note >= RANGE[0] && note <= RANGE[1]) {
 			return [OP_NOTE_UP, note];
 		}
 
-	} else if (op === ATTACK_OPERATION) {
+	} else if (op === MIDI0_NOTE_ON) {
 		if (note >= RANGE[0] && note <= RANGE[1]) {
 			return [OP_NOTE_DOWN, note];
 		}
@@ -275,7 +265,7 @@ function performOperation(op) {
 }
 
 function addOperation(op, timeInMs) {
-	if (state !== RECORDING) {
+	if (state !== NEW_RECORDING) {
 		return;
 	}
 
@@ -284,6 +274,31 @@ function addOperation(op, timeInMs) {
 		firstTime = timeInMs;
 	}
 	operations.push([op, (timeInMs - firstTime)]);
+}
+
+/**
+ *  MIDI INPUT
+ */
+if (navigator.requestMIDIAccess) {
+	navigator.requestMIDIAccess().then((midiAccess) => {
+		midiAccess.inputs.forEach((input) => {
+			input.addEventListener('midimessage', (e) => {
+
+				window.logMidi && console.log(e.data);
+
+				if (e.data[0] === MIDI0_L1) {
+					return reset();
+				}
+
+				const op = operationFromMidi(e.data);
+				if (!op) {
+					return;
+				}
+				addOperation(op, e.timeStamp);
+				performOperation(op);
+			})
+		});
+	});
 }
 
 window.addEventListener('click', (e) => {
@@ -304,18 +319,18 @@ window.addEventListener('click', (e) => {
 		}
 
 		if (target.classList.contains('active')) {
-			op = operationFromMidi([RELEASE_OPERATION, note, 0]);
+			op = operationFromMidi([MIDI0_NOTE_OFF, note, 0]);
 			addOperation(op, e.timeStamp);
 			performOperation(op);
 		}
 
-		op = operationFromMidi([ATTACK_OPERATION, note, 254]);
+		op = operationFromMidi([MIDI0_NOTE_ON, note, 254]);
 		addOperation(op, e.timeStamp);
 		performOperation(op);
 
 		keyTimeouts['z' + note] = setTimeout(() => {
 			if (keyTimeouts['z' + note]) {
-				op = operationFromMidi([RELEASE_OPERATION, note, 0]);
+				op = operationFromMidi([MIDI0_NOTE_OFF, note, 0]);
 				addOperation(op, e.timeStamp + 1000);
 				performOperation(op);
 			}
@@ -335,7 +350,7 @@ window.addEventListener('click', (e) => {
 	}
 
 	if (target.id == 'record') {
-		setState(RECORDING);
+		setState(NEW_RECORDING);
 		return false;
 	}
 
@@ -369,3 +384,5 @@ window.addEventListener('DOMContentLoaded', () => {
 	$one('.white').innerHTML = whites;
 	$one('.black').innerHTML = blacks;
 });
+
+console.log('To log MIDI messages: logMidi = true');
