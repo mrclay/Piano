@@ -36,7 +36,7 @@ function init() {
 	}
 
 	const streamEncoded = m[1];
-	const title = decodeURIComponent(m[2]);
+	const title = m[2] ? decodeURIComponent(m[2]) : '';
 	const pattern = /[A-Z][a-z0-9]+/g;
 	var token;
 
@@ -47,7 +47,7 @@ function init() {
 		operations.push([opTime[0], opTime[1]]);
 	}
 
-	title && setTitle(title);
+	setTitle(title);
 
 	$one('body').classList.remove('loading');
 	setState(STOPPED);
@@ -185,8 +185,7 @@ function save() {
 	setState(STOPPED);
 	location.hash = getHash();
 
-	const title = getTitle();
-	title && setTitle(title);
+	setTitle(getTitle());
 }
 
 function setTitle(title) {
