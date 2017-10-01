@@ -1,5 +1,5 @@
 import Piano from 'Piano';
-import Buffer from 'Tone/core/Buffer';
+//import Buffer from 'Tone/core/Buffer';
 
 const RANGE = [36, 96];
 const VELOCITIES = 1;
@@ -35,12 +35,12 @@ const $record = $one('#record');
 const $play = $one('#play');
 const $stop = $one('#stop');
 
-var state = STOPPED;
-var firstTime;
-var operations = [];
-var keyTimeouts = {};
-var playAllIntervals = [];
-var progressInterval;
+let state = STOPPED;
+let firstTime;
+let operations = [];
+let keyTimeouts = {};
+let playAllIntervals = [];
+let progressInterval;
 
 window.logMidi = false;
 
@@ -57,10 +57,10 @@ function init() {
 	const streamEncoded = m[1];
 	const title = m[2] ? decodeURIComponent(m[2]) : '';
 	const pattern = /[A-Z][a-z0-9]+/g;
-	var token;
+	let token;
 
 	while (token = pattern.exec(streamEncoded)) {
-		var opTime = decodeOp(token[0]);
+		let opTime = decodeOp(token[0]);
 
 		firstTime = 0;
 		operations.push([opTime[0], opTime[1]]);
@@ -145,7 +145,7 @@ function playAll() {
 	const numOperations = operations.length;
 	const lastTime = operations[operations.length - 1][1] * TIME_RESOLUTION_DIVISOR;
 	const startTime = (new Date).getTime();
-	var numPerformed = 0;
+	let numPerformed = 0;
 
 	progressInterval = setInterval(() => {
 		const now = (new Date).getTime();
@@ -188,7 +188,7 @@ function getHash() {
 		return encodeOp(el[0], el[1]);
 	}).join('');
 
-	var hash = '#s=' + encoded;
+	let hash = '#s=' + encoded;
 	if (title) {
 		hash += '&t=' + encodeURIComponent(title);
 	}
@@ -302,7 +302,7 @@ if (navigator.requestMIDIAccess) {
 }
 
 window.addEventListener('click', (e) => {
-	var target = e.target;
+	let target = e.target;
 
 	if (target.parentNode.nodeName === 'BUTTON') {
 		target = target.parentNode;
@@ -311,7 +311,7 @@ window.addEventListener('click', (e) => {
 	if (target.dataset.note) {
 		e.preventDefault();
 		const note = parseInt(target.dataset.note);
-		var op;
+		let op;
 
 		if (keyTimeouts['z' + note]) {
 			clearTimeout(keyTimeouts['z' + note]);
@@ -339,41 +339,41 @@ window.addEventListener('click', (e) => {
 		return false;
 	}
 
-	if (target.id == 'play') {
+	if (target.id === 'play') {
 		setState(PLAYING);
 		return false;
 	}
 
-	if (target.id == 'stop') {
+	if (target.id === 'stop') {
 		setState(STOPPED);
 		return false;
 	}
 
-	if (target.id == 'record') {
+	if (target.id === 'record') {
 		setState(NEW_RECORDING);
 		return false;
 	}
 
-	if (target.id == 'save') {
+	if (target.id === 'save') {
 		save();
 		return false;
 	}
 
-	if (target.id == 'reset') {
+	if (target.id === 'reset') {
 		reset();
 		return false;
 	}
 });
 
 window.addEventListener('DOMContentLoaded', () => {
-	var whites = '', blacks = '', note, mod, left = 36;
+	let whites = '', blacks = '', note, mod, left = 36;
 
 	for (note = RANGE[0]; note <= RANGE[1]; note++) {
 		mod = note % 12;
-		if (mod == 1 || mod == 3 || mod == 6 || mod == 8 || mod == 10) {
+		if (mod === 1 || mod === 3 || mod === 6 || mod === 8 || mod === 10) {
 			blacks += '<a href="#" data-note=' + note + ' style="left:' + left + 'px"></a>';
 			left += 34;
-			if (mod == 3 || mod == 10) {
+			if (mod === 3 || mod === 10) {
 				left += 34;
 			}
 		} else {
