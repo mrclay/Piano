@@ -1,37 +1,53 @@
 const webpack = require('webpack');
+const path = require('path')
 
 var PROD = process.argv.indexOf('-p') !== -1;
 
-module.exports = {
+module.exports = [{
 	context: __dirname,
-	entry: {
-		Main: ['babel-polyfill', 'Main'],
-		// Piano : 'Piano'
+	entry: {Main: ['babel-polyfill', './Main']},
+	output: {
+		filename: './build/[name].js',
+		chunkFilename: './build/[id].js',
+		sourceMapFilename : '[file].map',
+        publicPath: PROD ? '/piano' : '/local/piano',
 	},
+	resolve : {
+		modules : ['node_modules']
+	},
+	module: {
+		loaders: [{
+			test: /\.js$/,
+			exclude: /(node_modules)|Tone\.js/,
+			loader: 'babel-loader',
+			query: {
+				presets: ['es2015']
+			}
+		}]
+	},
+	devtool : '#source-map'
+}/*, {
+	context: __dirname + '/src',
+	entry: {Piano: './Piano'},
 	output: {
 		filename: './build/[name].js',
 		chunkFilename: './build/[id].js',
 		sourceMapFilename : '[file].map',
 		publicPath: PROD ? '/piano' : '/local/piano',
-		// library : 'Piano',
-		// libraryTarget : 'umd'
 	},
-	resolve: {
-		root: __dirname,
-		modulesDirectories : ['node_modules', 'node_modules/tone', 'src'],
+	resolve : {
+		modules : ['node_modules']
 	},
-	plugins: PROD ? [new webpack.optimize.UglifyJsPlugin({minimize: true})] : [],
 	module: {
-		loaders: [
-			{
-				test: /\.js$/,
-				exclude: /(node_modules)/,
-				loader: 'babel',
-				query: {
-				  presets: ['es2015']
-				}
+		loaders: [{
+			test: /\.js$/,
+			exclude: /(node_modules)|Tone\.js/,
+			loader: 'babel-loader',
+			query: {
+				presets: ['es2015']
 			}
-		]
+		}]
 	},
-	devtool : PROD ? '' : '#eval-source-map'
-};
+	externals: ['tone'],
+	devtool : '#source-map'
+}*/]

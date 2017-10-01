@@ -1,4 +1,8 @@
 *.wav
 /build
-/node_modules
+
+node_modules
+
 .jshintrc
+
+cors.json

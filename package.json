@@ -1,27 +1,31 @@
 {
-  "name": "piano",
-  "version": "1.0.0",
+  "name": "tone-piano",
+  "version": "0.0.10",
   "description": "",
-  "main": "build/Main.js",
+  "main": "build/Piano.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 0",
     "dev": "webpack",
-    "prod": "webpack -p"
+    "build": "webpack -p",
+    "prepublishOnly": "npm run build"
   },
   "author": "Yotam Mann",
   "license": "MIT",
-  "dependencies": {
+  "devDependencies": {
     "babel-core": "^6.11.4",
     "babel-loader": "^6.2.4",
-    "babel-polyfill": "^6.13.0",
+    "babel-polyfill": "^6.26.0",
     "babel-preset-es2015": "^6.9.0",
     "exports-loader": "^0.6.3",
     "file-loader": "*",
     "html-loader": "*",
     "midiconvert": "^0.4.0",
     "raw-loader": "*",
-    "tone": "^0.8.0",
     "url-loader": "*",
-    "webpack": "1.*"
+    "webpack": "2.*",
+    "webmidi": "^2.0.0-rc.7"
+  },
+  "dependencies": {
+    "tone": "^0.11.6"
   }
 }
