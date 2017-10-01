@@ -2,7 +2,7 @@ import React from 'react';
 import {STOPPED, NEW_RECORDING, PLAYING} from '../constants';
 
 export default function Play(props) {
-    switch (props.state) {
+    switch (props.playState) {
         case NEW_RECORDING:
             return (
                 <button id="stop" className="btn btn-default">

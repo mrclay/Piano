@@ -13,18 +13,43 @@ class App extends React.Component {
         super(props);
         this.state = {
             title: 'Untitled',
-            state: C.NEW_RECORDING,
+            playState: C.NEW_RECORDING,
 			progress: 0,
             firstTime: null,
 			operations: [],
-			keyTimeouts: {},
-        	playAllIntervals: [],
-        	progressInterval: null
     	};
+
+        this.keyTimeouts = {};
+        this.playAllIntervals = [];
+        this.progressInterval;
     }
 
     componentDidMount() {
-        piano.load('https://cdn.rawgit.com/mrclay/Piano/5abc2fb2/Salamander/').then(this.init.bind(this));
+        // MIDI
+        if (navigator.requestMIDIAccess) {
+            navigator.requestMIDIAccess().then((midiAccess) => {
+                midiAccess.inputs.forEach((input) => {
+                    input.addEventListener('midimessage', (e) => {
+
+                        window.logMidi && console.log(e.data);
+
+                        if (e.data[0] === C.MIDI0_L1) {
+                            return this.reset();
+                        }
+
+                        const op = operationFromMidi(e.data);
+                        if (!op) {
+                            return;
+                        }
+                        this.addOperation(op, e.timeStamp, () => {
+                            this.performOperation(op);
+						});
+                    })
+                });
+            });
+        }
+
+        piano.load(C.RAWGIT_URL).then(this.init.bind(this));
 	}
 
     init() {
@@ -54,12 +79,12 @@ class App extends React.Component {
         this.setPlayState(C.STOPPED);
     }
 
-    setPlayState(newState) {
+    setPlayState(newState, after) {
         this.stopAll();
 
         let newComponentState = {
-            progress: operations.length ? 1 : 0,
-            state: newState
+            progress: this.state.operations.length ? 1 : 0,
+            playState: newState
 		};
 
         if (newState === C.PLAYING && (!this.state.operations.length)) {
@@ -80,34 +105,136 @@ class App extends React.Component {
                 break;
         }
 
-        this.setState(newComponentState);
-
-        // TODO just don't
-        document.querySelector('body').dataset.state = newState;
+        this.setState(newComponentState, () => {
+            after && after();
+        	// TODO just don't
+            document.querySelector('body').dataset.state = newState;
+		});
     }
 
     stopAll() {
-        if (this.state.progressInterval) {
-            clearInterval(progressInterval);
+        if (this.progressInterval) {
+            clearInterval(this.progressInterval);
         }
-        playAllIntervals.forEach(clearTimeout);
-        $all('[data-note].active').forEach((el) => {
-            const note = parseInt(el.dataset.note, 10);
-            piano.keyUp(note);
-            el.classList.remove('active');
+        this.playAllIntervals.forEach(clearTimeout);
+        // $all('[data-note].active').forEach((el) => {
+        //     const note = parseInt(el.dataset.note, 10);
+        //     piano.keyUp(note);
+        //     el.classList.remove('active');
+        // });
+        this.playAllIntervals = [];
+    }
+
+    getHash() {
+        const encoded = this.state.operations.map((el) => {
+            return encodeOp(el[0], el[1]);
+        }).join('');
+
+        let hash = '#s=' + encoded;
+        if (this.state.title) {
+            hash += '&t=' + encodeURIComponent(this.state.title);
+        }
+
+        return hash;
+    }
+
+    save() {
+        location.hash = this.getHash();
+    	this.setPlayState(C.STOPPED, () => {
+            this.setState({
+                title: 'TODO: title from form'
+            });
+		});
+    }
+
+    playAll() {
+        const numOperations = this.state.operations.length;
+        const lastTime = this.state.operations[this.state.operations.length - 1][1] * C.TIME_RESOLUTION_DIVISOR;
+        const startTime = (new Date).getTime();
+        let numPerformed = 0;
+
+        this.progressInterval = setInterval(() => {
+            const now = (new Date).getTime();
+            this.setState({
+				progress: (now - startTime) / lastTime
+			});
+        }, 20);
+
+        this.state.operations.forEach((el) => {
+            // relying on the timer is awful, but Piano's "time" arguments just don't work.
+            this.playAllIntervals.push(
+                setTimeout(() => {
+                        this.performOperation(el[0]);
+                        numPerformed++;
+                        if (numPerformed === numOperations) {
+                            this.setPlayState(C.STOPPED);
+                        }
+                    },
+                    el[1] * C.TIME_RESOLUTION_DIVISOR
+                )
+            );
         });
-        playAllIntervals = [];
+    }
+
+    reset() {
+        this.stopAll();
+        location.hash = '#';
+        this.firstTime = undefined;
+        this.setState({
+			operations: [],
+			title: '',
+		}, () => {
+            this.setPlayState(C.NEW_RECORDING);
+		});
+    }
+
+    performOperation(op) {
+        switch (op[0]) {
+            case C.OP_PEDAL_DOWN: return piano.pedalDown();
+
+            case C.OP_PEDAL_UP: return piano.pedalUp();
+
+            case C.OP_NOTE_DOWN:
+                piano.keyDown(op[1]);
+                // TODO activate key
+                //$one('[data-note="' + op[1] + '"]').classList.add('active');
+                return;
+
+            case C.OP_NOTE_UP:
+                piano.keyUp(op[1]);
+            	// TODO deactivate key
+                //$one('[data-note="' + op[1] + '"]').classList.remove('active');
+                return;
+        }
+    }
+
+    addOperation(op, timeInMs, after) {
+        if (this.state.playState !== C.NEW_RECORDING) {
+        	after && after();
+            return;
+        }
+
+        timeInMs = Math.round(timeInMs / C.TIME_RESOLUTION_DIVISOR);
+        if (firstTime === undefined) {
+            firstTime = timeInMs;
+        }
+
+        this.setState({
+			operations: this.state.operations.concat([[op, (timeInMs - firstTime)]])
+		}, () => {
+            after && after();
+		});
     }
 
     render() {
         return (
 			<div>
-				<h1 className="unsaved">“{this.state.title}”</h1>
+				<h1 className={this.state.operations.length ? '' : 'unsaved'}>“{this.state.title}”</h1>
 				<Keyboard
 					actives={[]} />
 				<section>
 					<Controls
-						state={this.state.state} />
+						playState={this.state.playState} />
 				</section>
 				<section>
 					<Progress
@@ -135,15 +262,6 @@ ReactDOM.render(
 
 window.logMidi = false;
 
-
-
-function setProgress(ratio) {
-	const el = $one('#progress');
-	el.style.width = (100 * ratio) + '%';
-	el.setAttribute('aria-valuenow', Math.round(100 * ratio));
-	$one('#progress .progress-percentage').innerHTML = Math.round(100 * ratio);
-}
-
 function encodeOp(op, time) {
 	return [
 		String.fromCharCode(op[0] + C.ORD_A_UPPER),
@@ -158,80 +276,6 @@ function decodeOp(token) {
 	const time = parseInt(token.substr(3), 36);
 	const op = [command, note];
 	return [op, time];
-}
-
-function playAll() {
-	const numOperations = operations.length;
-	const lastTime = operations[operations.length - 1][1] * C.TIME_RESOLUTION_DIVISOR;
-	const startTime = (new Date).getTime();
-	let numPerformed = 0;
-
-	progressInterval = setInterval(() => {
-		const now = (new Date).getTime();
-		setProgress((now - startTime) / lastTime);
-	}, 20);
-
-	operations.forEach((el) => {
-		// relying on the timer is awful, but Piano's "time" arguments just don't work.
-		playAllIntervals.push(
-			setTimeout(() => {
-					performOperation(el[0]);
-					numPerformed++;
-					if (numPerformed === numOperations) {
-						setState(C.STOPPED);
-					}
-				},
-				el[1] * C.TIME_RESOLUTION_DIVISOR
-			)
-		);
-	});
-}
-
-function getHash() {
-	const title = getTitle();
-
-	const encoded = operations.map((el) => {
-		return encodeOp(el[0], el[1]);
-	}).join('');
-
-	let hash = '#s=' + encoded;
-	if (title) {
-		hash += '&t=' + encodeURIComponent(title);
-	}
-
-	return hash;
-}
-
-function getTitle() {
-	return $one('#title').value;
-}
-
-function save() {
-	setState(C.STOPPED);
-	location.hash = getHash();
-
-	setTitle(getTitle());
-}
-
-function setTitle(title) {
-	if (title) {
-		$one('#title').value = title;
-		$one('h1').textContent = '“' + title + '”';
-		$one('h1').classList.remove('unsaved');
-	} else {
-		$one('#title').value = '';
-		$one('h1').textContent = '“Untitled”';
-		$one('h1').classList.add('unsaved');
-	}
-}
-
-function reset() {
-	stopAll();
-	location.hash = '#';
-	firstTime = undefined;
-	operations = [];
-	setTitle('');
-	setState(C.NEW_RECORDING);
 }
 
 function operationFromMidi(data) {
@@ -252,59 +296,6 @@ function operationFromMidi(data) {
 			return [C.OP_NOTE_DOWN, note];
 		}
 	}
-}
-
-function performOperation(op) {
-	switch (op[0]) {
-		case C.OP_PEDAL_DOWN: return piano.pedalDown();
-
-		case C.OP_PEDAL_UP: return piano.pedalUp();
-
-		case C.OP_NOTE_DOWN:
-			$one('[data-note="' + op[1] + '"]').classList.add('active');
-			return piano.keyDown(op[1]);
-
-		case C.OP_NOTE_UP:
-			$one('[data-note="' + op[1] + '"]').classList.remove('active');
-			return piano.keyUp(op[1]);
-	}
-}
-
-function addOperation(op, timeInMs) {
-	if (state !== C.NEW_RECORDING) {
-		return;
-	}
-
-	timeInMs = Math.round(timeInMs / C.TIME_RESOLUTION_DIVISOR);
-	if (firstTime === undefined) {
-		firstTime = timeInMs;
-	}
-	operations.push([op, (timeInMs - firstTime)]);
-}
-
-/**
- *  MIDI INPUT
- */
-if (navigator.requestMIDIAccess) {
-	navigator.requestMIDIAccess().then((midiAccess) => {
-		midiAccess.inputs.forEach((input) => {
-			input.addEventListener('midimessage', (e) => {
-
-				window.logMidi && console.log(e.data);
-
-				if (e.data[0] === C.MIDI0_L1) {
-					return reset();
-				}
-
-				const op = operationFromMidi(e.data);
-				if (!op) {
-					return;
-				}
-				addOperation(op, e.timeStamp);
-				performOperation(op);
-			})
-		});
-	});
 }
 
 window.addEventListener('click', (e) => {
