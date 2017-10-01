@@ -1,4 +1,4 @@
-import {Piano} from './src/Piano';
+import {Piano} from './Piano';
 //import Buffer from 'Tone/core/Buffer';
 
 const RANGE = [36, 96];

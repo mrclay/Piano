@@ -1,29 +1,33 @@
 const webpack = require('webpack');
-const path = require('path')
+const path = require('path');
 
-var PROD = process.argv.indexOf('-p') !== -1;
+//const PROD = process.argv.indexOf('-p') !== -1;
 
 module.exports = [{
 	context: __dirname,
-	entry: {Main: ['babel-polyfill', './Main']},
+	entry: {index: ['babel-polyfill', './src/index']},
 	output: {
 		filename: './build/[name].js',
 		chunkFilename: './build/[id].js',
 		sourceMapFilename : '[file].map',
-        publicPath: PROD ? '/piano' : '/local/piano',
+        //publicPath: PROD ? '/piano' : '/local/piano',
 	},
 	resolve : {
 		modules : ['node_modules']
 	},
 	module: {
-		loaders: [{
-			test: /\.js$/,
-			exclude: /(node_modules)|Tone\.js/,
-			loader: 'babel-loader',
-			query: {
-				presets: ['es2015']
+		rules: [
+			{
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    query: {
+                        presets: ['env']
+                    }
+				}
 			}
-		}]
+		]
 	},
 	devtool : '#source-map'
 }/*, {
@@ -50,4 +54,4 @@ module.exports = [{
 	},
 	externals: ['tone'],
 	devtool : '#source-map'
-}*/]
+}*/];
