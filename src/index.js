@@ -1,122 +1,141 @@
+import React from 'react';
+import ReactDOM from 'react-dom';
 import {Piano} from './Piano';
-//import Buffer from 'Tone/core/Buffer';
+import Keyboard from './components/keyboard';
+import Controls from './components/controls';
+import Progress from './components/progress';
+import * as C from './constants';
 
-const RANGE = [36, 96];
-const VELOCITIES = 1;
-const USE_RELEASE = false;
-const TIME_RESOLUTION_DIVISOR = 4;
-const ORD_A_UPPER = 'A'.charCodeAt(0);
+const piano = new Piano(C.RANGE, C.VELOCITIES, C.USE_RELEASE).toMaster();
 
-const STOPPED = 'stopped';
-const NEW_RECORDING = 'new_recording';
-const PLAYING = 'playing';
+class App extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = {
+            title: 'Untitled',
+            state: C.NEW_RECORDING,
+			progress: 0,
+            firstTime: null,
+			operations: [],
+			keyTimeouts: {},
+        	playAllIntervals: [],
+        	progressInterval: null
+    	};
+    }
 
-const OP_PEDAL_DOWN = 0;
-const OP_PEDAL_UP = 1;
-const OP_NOTE_DOWN = 2;
-const OP_NOTE_UP = 3;
+    componentDidMount() {
+        piano.load('https://cdn.rawgit.com/mrclay/Piano/5abc2fb2/Salamander/').then(this.init.bind(this));
+	}
 
-// http://www.midimountain.com/midi/midi_status.htm
-const MIDI0_NOTE_ON = 144;
-const MIDI0_NOTE_OFF = 128;
-const MIDI0_PEDAL = 176;
-const MIDI0_L1 = 252; // L1 button on Edirol GM2
-const MIDI0_TUNE = 176; // TODO use for metronome?
+    init() {
+        const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
+        if (!m) {
+            return this.setPlayState(C.NEW_RECORDING);
+        }
 
-const MIDI1_PEDAL = 64;
-const MIDI1_TUNE = 10;
+        const streamEncoded = m[1];
+        const title = m[2] ? decodeURIComponent(m[2]) : '';
+        const pattern = /[A-Z][a-z0-9]+/g;
+        let token;
+        let operations = this.state.operations.slice();
 
-const MIDI2_RELEASE_VELOCITY = 0;
+        while (token = pattern.exec(streamEncoded)) {
+            let opTime = decodeOp(token[0]);
 
-const piano = new Piano(RANGE, VELOCITIES, USE_RELEASE).toMaster();
-const $one = document.querySelector.bind(document);
-const $all = document.querySelectorAll.bind(document);
-const $record = $one('#record');
-const $play = $one('#play');
-const $stop = $one('#stop');
+            firstTime = 0;
+            operations.push([opTime[0], opTime[1]]);
+        }
 
-let state = STOPPED;
-let firstTime;
-let operations = [];
-let keyTimeouts = {};
-let playAllIntervals = [];
-let progressInterval;
+        this.setState({
+			operations,
+			title
+		})
+
+        this.setPlayState(C.STOPPED);
+    }
+
+    setPlayState(newState) {
+        this.stopAll();
+
+        let newComponentState = {
+            progress: operations.length ? 1 : 0,
+            state: newState
+		};
+
+        if (newState === C.PLAYING && (!this.state.operations.length)) {
+        	return this.setPlayState(C.STOPPED);
+		}
+
+        switch (newState) {
+            case C.NEW_RECORDING:
+                newComponentState.operations = [];
+                newComponentState.firstTime = undefined;
+                break;
+
+            case C.STOPPED:
+                break;
+
+            case C.PLAYING:
+                this.playAll();
+                break;
+        }
+
+        this.setState(newComponentState);
+
+        // TODO just don't
+        document.querySelector('body').dataset.state = newState;
+    }
+
+    stopAll() {
+        if (this.state.progressInterval) {
+            clearInterval(progressInterval);
+        }
+        playAllIntervals.forEach(clearTimeout);
+        $all('[data-note].active').forEach((el) => {
+            const note = parseInt(el.dataset.note, 10);
+            piano.keyUp(note);
+            el.classList.remove('active');
+        });
+        playAllIntervals = [];
+    }
+
+    render() {
+        return (
+			<div>
+				<h1 className="unsaved">“{this.state.title}”</h1>
+				<Keyboard
+					actives={[]} />
+				<section>
+					<Controls
+						state={this.state.state} />
+				</section>
+				<section>
+					<Progress
+						ratio={this.state.progress} />
+				</section>
+				<section>
+					<div className="input-group input-group-lg">
+						<input id="title" type="text" className="form-control" placeholder="Title" />
+						<span className="input-group-btn">
+                        <button id="save" className="btn btn-default" type="button">
+                            <i className="fa fa-floppy-o" aria-hidden="true"></i> Save to URL
+                        </button>
+                        </span>
+					</div>
+				</section>
+			</div>
+        );
+    }
+}
+
+ReactDOM.render(
+	<App />,
+    document.getElementById('root')
+);
 
 window.logMidi = false;
 
-piano.load('https://cdn.rawgit.com/mrclay/Piano/5abc2fb2/Salamander/').then(init);
 
-function init() {
-	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
-	if (!m) {
-		$one('body').classList.remove('loading');
-		setState(NEW_RECORDING);
-		return;
-	}
-
-	const streamEncoded = m[1];
-	const title = m[2] ? decodeURIComponent(m[2]) : '';
-	const pattern = /[A-Z][a-z0-9]+/g;
-	let token;
-
-	while (token = pattern.exec(streamEncoded)) {
-		let opTime = decodeOp(token[0]);
-
-		firstTime = 0;
-		operations.push([opTime[0], opTime[1]]);
-	}
-
-	setTitle(title);
-
-	$one('body').classList.remove('loading');
-	setState(STOPPED);
-}
-
-function setState(newState) {
-	// reset UI to stopped state
-	stopAll();
-	$record.classList.remove('active');
-	$record.classList.remove('disabled');
-	$stop.style.display = 'none';
-	$play.style.display = '';
-
-	if (operations.length) {
-		$one('#record span').innerHTML = 'Re-record';
-		$play.classList.remove('disabled');
-		setProgress(1);
-	} else {
-		$one('#record span').innerHTML = 'Record';
-		$play.classList.add('disabled');
-		setProgress(0);
-	}
-
-	switch (newState) {
-		case NEW_RECORDING:
-			operations = [];
-			firstTime = undefined;
-			$record.classList.add('active');
-			$record.classList.add('disabled');
-			$one('#record span').innerHTML = 'Recording...';
-			$play.style.display = 'none';
-			$stop.style.display = '';
-			break;
-
-		case STOPPED:
-			break;
-
-		case PLAYING:
-			if (!operations.length) {
-				return setState(STOPPED);
-			}
-			playAll();
-			$play.style.display = 'none';
-			$stop.style.display = '';
-			break;
-	}
-
-	state = newState;
-	$one('body').dataset.state = newState;
-}
 
 function setProgress(ratio) {
 	const el = $one('#progress');
@@ -127,14 +146,14 @@ function setProgress(ratio) {
 
 function encodeOp(op, time) {
 	return [
-		String.fromCharCode(op[0] + ORD_A_UPPER),
+		String.fromCharCode(op[0] + C.ORD_A_UPPER),
 		op[1].toString(16),
 		Math.round(time).toString(36)
 	].join('');
 }
 
 function decodeOp(token) {
-	const command = token[0].charCodeAt(0) - ORD_A_UPPER;
+	const command = token[0].charCodeAt(0) - C.ORD_A_UPPER;
 	const note = parseInt(token.substr(1, 2), 16);
 	const time = parseInt(token.substr(3), 36);
 	const op = [command, note];
@@ -143,7 +162,7 @@ function decodeOp(token) {
 
 function playAll() {
 	const numOperations = operations.length;
-	const lastTime = operations[operations.length - 1][1] * TIME_RESOLUTION_DIVISOR;
+	const lastTime = operations[operations.length - 1][1] * C.TIME_RESOLUTION_DIVISOR;
 	const startTime = (new Date).getTime();
 	let numPerformed = 0;
 
@@ -159,26 +178,13 @@ function playAll() {
 					performOperation(el[0]);
 					numPerformed++;
 					if (numPerformed === numOperations) {
-						setState(STOPPED);
+						setState(C.STOPPED);
 					}
 				},
-				el[1] * TIME_RESOLUTION_DIVISOR
+				el[1] * C.TIME_RESOLUTION_DIVISOR
 			)
 		);
 	});
-}
-
-function stopAll() {
-	if (progressInterval) {
-		clearInterval(progressInterval);
-	}
-	playAllIntervals.forEach(clearTimeout);
-	$all('[data-note].active').forEach((el) => {
-		const note = parseInt(el.dataset.note, 10);
-		piano.keyUp(note);
-		el.classList.remove('active');
-	});
-	playAllIntervals = [];
 }
 
 function getHash() {
@@ -201,7 +207,7 @@ function getTitle() {
 }
 
 function save() {
-	setState(STOPPED);
+	setState(C.STOPPED);
 	location.hash = getHash();
 
 	setTitle(getTitle());
@@ -225,7 +231,7 @@ function reset() {
 	firstTime = undefined;
 	operations = [];
 	setTitle('');
-	setState(NEW_RECORDING);
+	setState(C.NEW_RECORDING);
 }
 
 function operationFromMidi(data) {
@@ -233,43 +239,43 @@ function operationFromMidi(data) {
 	const note = data[1];
 	const velocity = data[2];
 
-	if (op === MIDI0_PEDAL && note === MIDI1_PEDAL) {
-		return (velocity > 0) ? [OP_PEDAL_DOWN, 0] : [OP_PEDAL_UP, 0];
+	if (op === C.MIDI0_PEDAL && note === C.MIDI1_PEDAL) {
+		return (velocity > 0) ? [C.OP_PEDAL_DOWN, 0] : [C.OP_PEDAL_UP, 0];
 
-	} else if (op === MIDI0_NOTE_OFF || velocity === MIDI2_RELEASE_VELOCITY) {
-		if (note >= RANGE[0] && note <= RANGE[1]) {
-			return [OP_NOTE_UP, note];
+	} else if (op === C.MIDI0_NOTE_OFF || velocity === C.MIDI2_RELEASE_VELOCITY) {
+		if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
+			return [C.OP_NOTE_UP, note];
 		}
 
-	} else if (op === MIDI0_NOTE_ON) {
-		if (note >= RANGE[0] && note <= RANGE[1]) {
-			return [OP_NOTE_DOWN, note];
+	} else if (op === C.MIDI0_NOTE_ON) {
+		if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
+			return [C.OP_NOTE_DOWN, note];
 		}
 	}
 }
 
 function performOperation(op) {
 	switch (op[0]) {
-		case OP_PEDAL_DOWN: return piano.pedalDown();
+		case C.OP_PEDAL_DOWN: return piano.pedalDown();
 
-		case OP_PEDAL_UP: return piano.pedalUp();
+		case C.OP_PEDAL_UP: return piano.pedalUp();
 
-		case OP_NOTE_DOWN:
+		case C.OP_NOTE_DOWN:
 			$one('[data-note="' + op[1] + '"]').classList.add('active');
 			return piano.keyDown(op[1]);
 
-		case OP_NOTE_UP:
+		case C.OP_NOTE_UP:
 			$one('[data-note="' + op[1] + '"]').classList.remove('active');
 			return piano.keyUp(op[1]);
 	}
 }
 
 function addOperation(op, timeInMs) {
-	if (state !== NEW_RECORDING) {
+	if (state !== C.NEW_RECORDING) {
 		return;
 	}
 
-	timeInMs = Math.round(timeInMs / TIME_RESOLUTION_DIVISOR);
+	timeInMs = Math.round(timeInMs / C.TIME_RESOLUTION_DIVISOR);
 	if (firstTime === undefined) {
 		firstTime = timeInMs;
 	}
@@ -286,7 +292,7 @@ if (navigator.requestMIDIAccess) {
 
 				window.logMidi && console.log(e.data);
 
-				if (e.data[0] === MIDI0_L1) {
+				if (e.data[0] === C.MIDI0_L1) {
 					return reset();
 				}
 
@@ -319,18 +325,18 @@ window.addEventListener('click', (e) => {
 		}
 
 		if (target.classList.contains('active')) {
-			op = operationFromMidi([MIDI0_NOTE_OFF, note, 0]);
+			op = operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
 			addOperation(op, e.timeStamp);
 			performOperation(op);
 		}
 
-		op = operationFromMidi([MIDI0_NOTE_ON, note, 254]);
+		op = operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
 		addOperation(op, e.timeStamp);
 		performOperation(op);
 
 		keyTimeouts['z' + note] = setTimeout(() => {
 			if (keyTimeouts['z' + note]) {
-				op = operationFromMidi([MIDI0_NOTE_OFF, note, 0]);
+				op = operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
 				addOperation(op, e.timeStamp + 1000);
 				performOperation(op);
 			}
@@ -340,17 +346,17 @@ window.addEventListener('click', (e) => {
 	}
 
 	if (target.id === 'play') {
-		setState(PLAYING);
+		setState(C.PLAYING);
 		return false;
 	}
 
 	if (target.id === 'stop') {
-		setState(STOPPED);
+		setState(C.STOPPED);
 		return false;
 	}
 
 	if (target.id === 'record') {
-		setState(NEW_RECORDING);
+		setState(C.NEW_RECORDING);
 		return false;
 	}
 
@@ -363,26 +369,6 @@ window.addEventListener('click', (e) => {
 		reset();
 		return false;
 	}
-});
-
-window.addEventListener('DOMContentLoaded', () => {
-	let whites = '', blacks = '', note, mod, left = 36;
-
-	for (note = RANGE[0]; note <= RANGE[1]; note++) {
-		mod = note % 12;
-		if (mod === 1 || mod === 3 || mod === 6 || mod === 8 || mod === 10) {
-			blacks += '<a href="#" data-note=' + note + ' style="left:' + left + 'px"></a>';
-			left += 34;
-			if (mod === 3 || mod === 10) {
-				left += 34;
-			}
-		} else {
-			whites += '<a href="#" data-note=' + note + '></a>';
-		}
-	}
-
-	$one('.white').innerHTML = whites;
-	$one('.black').innerHTML = blacks;
 });
 
 console.log('To log MIDI messages: logMidi = true');
