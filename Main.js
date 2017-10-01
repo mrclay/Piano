@@ -44,7 +44,7 @@ let progressInterval;
 
 window.logMidi = false;
 
-piano.load('https://cdn.rawgit.com/mrclay/Piano/1421a768/Salamander/').then(init);
+piano.load('https://cdn.rawgit.com/mrclay/Piano/5abc2fb2/Salamander/').then(init);
 
 function init() {
 	const m = location.hash.match(/s=(\w+)(?:&t=(.*))?/);
