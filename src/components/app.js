@@ -9,7 +9,7 @@ export default class App extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-            title: C.INITIAL_TITLE,
+            title: '',
             playState: C.NEW_RECORDING,
             progress: 0,
             firstTime: null,
@@ -20,6 +20,13 @@ export default class App extends React.Component {
         this.keyTimeouts = {};
         this.playAllIntervals = [];
         this.progressInterval;
+
+        this.handleSave = this.handleSave.bind(this);
+        this.handleReset = this.handleReset.bind(this);
+        this.handlePlay = this.handlePlay.bind(this);
+        this.handleStop = this.handleStop.bind(this);
+        this.handleRecord = this.handleRecord.bind(this);
+        this.handleTitleChange = this.handleTitleChange.bind(this);
     }
 
     componentDidMount() {
@@ -52,8 +59,8 @@ export default class App extends React.Component {
         this.piano.load(C.RAWGIT_URL).then(this.init.bind(this));
     }
 
+    // TODO get rid of this completely
     initEvents() {
-        // TODO re-do
         window.addEventListener('click', (e) => {
             let target = e.target;
 
@@ -61,73 +68,63 @@ export default class App extends React.Component {
                 target = target.parentNode;
             }
 
-            if (target.dataset.note) {
-                e.preventDefault();
-                const note = parseInt(target.dataset.note);
-                let op;
+            if (!target.dataset.note) {
+                return;
+            }
 
-                if (this.keyTimeouts['z' + note]) {
-                    clearTimeout(this.keyTimeouts['z' + note]);
-                    delete this.keyTimeouts['z' + note];
-                }
+            // TODO move to Key??
+            e.preventDefault();
+            const note = parseInt(target.dataset.note);
+            let op;
 
-                if (target.classList.contains('active')) {
-                    op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+            if (this.keyTimeouts['z' + note]) {
+                clearTimeout(this.keyTimeouts['z' + note]);
+                delete this.keyTimeouts['z' + note];
+            }
 
-                    // TODO this needs to be async :/
-                    this.addOperation(op, e.timeStamp);
-
-                    // TODO this needs to be async :/
-                    this.performOperation(op);
-                }
-
-                op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
+            if (target.classList.contains('active')) {
+                op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
 
                 // TODO this needs to be async :/
                 this.addOperation(op, e.timeStamp);
 
                 // TODO this needs to be async :/
                 this.performOperation(op);
-
-                this.keyTimeouts['z' + note] = setTimeout(() => {
-                    if (this.keyTimeouts['z' + note]) {
-                        op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-
-                        // TODO this needs to be async :/
-                        this.addOperation(op, e.timeStamp + 1000);
-
-                        this.performOperation(op);
-                    }
-                }, 1000);
-
-                return false;
             }
 
-            if (target.id === 'play') {
-                this.setPlayState(C.PLAYING);
-                return false;
-            }
+            op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
 
-            if (target.id === 'stop') {
-                this.setPlayState(C.STOPPED);
-                return false;
-            }
+            // TODO this needs to be async :/
+            this.addOperation(op, e.timeStamp);
 
-            if (target.id === 'record') {
-                this.setPlayState(C.NEW_RECORDING);
-                return false;
-            }
+            // TODO this needs to be async :/
+            this.performOperation(op);
 
-            if (target.id === 'save') {
-                this.save();
-                return false;
-            }
+            this.keyTimeouts['z' + note] = setTimeout(() => {
+                if (this.keyTimeouts['z' + note]) {
+                    op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
 
-            if (target.id === 'reset') {
-                this.reset();
-                return false;
-            }
+                    // TODO this needs to be async :/
+                    this.addOperation(op, e.timeStamp + 1000);
+
+                    this.performOperation(op);
+                }
+            }, 1000);
+
+            return false;
         });
+    }
+
+    handlePlay() {
+        this.setPlayState(C.PLAYING);
+    }
+
+    handleStop() {
+        this.setPlayState(C.STOPPED);
+    }
+
+    handleRecord() {
+        this.setPlayState(C.NEW_RECORDING);
     }
 
     init() {
@@ -157,6 +154,12 @@ export default class App extends React.Component {
         });
     }
 
+    handleTitleChange(e) {
+        this.setState({
+            title: e.target.value
+        });
+    }
+
     setPlayState(newState, after) {
         this.stopAll();
 
@@ -166,14 +169,14 @@ export default class App extends React.Component {
         };
 
         if (newState === C.PLAYING && (!this.state.operations.length)) {
-            return this.setPlayState(C.STOPPED);
+            return this.setPlayState(C.STOPPED, after);
         }
 
         switch (newState) {
             case C.NEW_RECORDING:
                 newComponentState.operations = [];
                 newComponentState.firstTime = undefined;
-                newComponentState.title = C.INITIAL_TITLE;
+                newComponentState.title = '';
                 break;
 
             case C.STOPPED:
@@ -217,13 +220,9 @@ export default class App extends React.Component {
         return hash;
     }
 
-    save() {
+    handleSave() {
         location.hash = this.getHash();
-        this.setPlayState(C.STOPPED, () => {
-            this.setState({
-                title: 'TODO: title from form'
-            });
-        });
+        this.setPlayState(C.STOPPED);
     }
 
     playAll() {
@@ -243,11 +242,12 @@ export default class App extends React.Component {
             // relying on the timer is awful, but Piano's "time" arguments just don't work.
             this.playAllIntervals.push(
                 setTimeout(() => {
-                        this.performOperation(el[0]);
-                        numPerformed++;
-                        if (numPerformed === numOperations) {
-                            this.setPlayState(C.STOPPED);
-                        }
+                        this.performOperation(el[0], () => {
+                            numPerformed++;
+                            if (numPerformed === numOperations) {
+                                this.setPlayState(C.STOPPED);
+                            }
+                        });
                     },
                     el[1] * C.TIME_RESOLUTION_DIVISOR
                 )
@@ -255,29 +255,35 @@ export default class App extends React.Component {
         });
     }
 
-    reset() {
+    handleReset() {
         this.stopAll();
         location.hash = '#';
         this.firstTime = undefined;
         this.setPlayState(C.NEW_RECORDING);
     }
 
-    performOperation(op) {
+    performOperation(op, after) {
         switch (op[0]) {
-            case C.OP_PEDAL_DOWN: return this.piano.pedalDown();
+            case C.OP_PEDAL_DOWN:
+                after && after();
+                return this.piano.pedalDown();
 
-            case C.OP_PEDAL_UP: return this.piano.pedalUp();
+            case C.OP_PEDAL_UP:
+                after && after();
+                return this.piano.pedalUp();
 
             case C.OP_NOTE_DOWN:
                 this.piano.keyDown(op[1]);
-                // TODO activate key
+                // TODO activate key by setting state
                 //$one('[data-note="' + op[1] + '"]').classList.add('active');
+                after && after();
                 return;
 
             case C.OP_NOTE_UP:
                 this.piano.keyUp(op[1]);
-                // TODO deactivate key
+                // TODO deactivate key by setting state
                 //$one('[data-note="' + op[1] + '"]').classList.remove('active');
+                after && after();
                 return;
         }
     }
@@ -339,23 +345,35 @@ export default class App extends React.Component {
     render() {
         return (
             <div>
-                <h1 className={this.state.operations.length ? '' : 'unsaved'}>“{this.state.title}”</h1>
+                <h1 className={this.state.operations.length ? '' : 'unsaved'}>
+                    “{this.state.title ? this.state.title : C.DEFAULT_TITLE }”
+                </h1>
                 <Keyboard
-                    actives={[]} />
+                    actives={[]}
+                />
                 <section>
                     <Controls
                         playState={this.state.playState}
-                        hasOperations={this.state.operations.length > 0} />
+                        hasOperations={this.state.operations.length > 0}
+                        handleReset={this.handleReset}
+                        handleStop={this.handleStop}
+                        handlePlay={this.handlePlay}
+                        handleRecord={this.handleRecord}
+                    />
                 </section>
                 <section>
                     <Progress
-                        ratio={this.state.progress} />
+                        ratio={this.state.progress}
+                    />
                 </section>
                 <section>
                     <div className="input-group input-group-lg">
-                        <input id="title" type="text" className="form-control" placeholder="Title" />
+                        <input id="title" type="text" className="form-control" placeholder="Title"
+                               value={this.state.title}
+                               onChange={this.handleTitleChange}
+                        />
                         <span className="input-group-btn">
-                        <button id="save" className="btn btn-default" type="button">
+                        <button onClick={this.handleSave} id="save" className="btn btn-default" type="button">
                             <i className="fa fa-floppy-o" aria-hidden="true"></i> Save to URL
                         </button>
                         </span>
