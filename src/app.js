@@ -1,9 +1,10 @@
 import React from 'react';
-import {Piano} from '../Piano';
-import Keyboard from './keyboard';
-import Controls from './controls';
-import Progress from './progress';
-import * as C from '../constants';
+import {Piano} from './Piano';
+import Keyboard from './components/keyboard';
+import Controls from './components/controls';
+import Progress from './components/progress';
+import * as C from './constants';
+import Ops from './app/operations';
 
 export default class App extends React.Component {
     constructor(props) {
@@ -13,10 +14,11 @@ export default class App extends React.Component {
             playState: C.NEW_RECORDING,
             progress: 0,
             firstTime: null,
-            operations: [],
+            hasOperations: false
         };
 
         this.piano = new Piano(C.RANGE, C.VELOCITIES, C.USE_RELEASE).toMaster();
+        this.operations = [];
         this.keyTimeouts = {};
         this.playAllIntervals = [];
         this.progressInterval;
@@ -48,10 +50,9 @@ export default class App extends React.Component {
                         if (!op) {
                             return;
                         }
-                        this.addOperation(op, e.timeStamp, () => {
-                            this.performOperation(op);
-                        });
-                    })
+                        this.addOperation(op, e.timeStamp);
+                        this.performOperation(op);
+                    });
                 });
             });
         }
@@ -82,15 +83,15 @@ export default class App extends React.Component {
         const pattern = /[A-Z][a-z0-9]+/g;
         let token;
         let newComponentState = {
-            operations: this.state.operations.slice(),
             title
         };
 
         while (token = pattern.exec(streamEncoded)) {
-            let opTime = this.decodeOp(token[0]);
+            let opTime = Ops.decodeOp(token[0]);
 
             newComponentState.firstTime = 0;
-            newComponentState.operations.push([opTime[0], opTime[1]]);
+            newComponentState.hasOperations = true;
+            this.operations.push([opTime[0], opTime[1]]);
         }
 
         this.setState(newComponentState, () => {
@@ -102,17 +103,18 @@ export default class App extends React.Component {
         this.stopAll();
 
         let newComponentState = {
-            progress: this.state.operations.length ? 1 : 0,
+            progress: this.operations.length ? 1 : 0,
             playState: newState
         };
 
-        if (newState === C.PLAYING && (!this.state.operations.length)) {
+        if (newState === C.PLAYING && (!this.operations.length)) {
             return this.setPlayState(C.STOPPED, after);
         }
 
         switch (newState) {
             case C.NEW_RECORDING:
-                newComponentState.operations = [];
+                this.operations = [];
+                newComponentState.hasOperations = false;
                 newComponentState.firstTime = undefined;
                 newComponentState.title = '';
                 break;
@@ -147,8 +149,8 @@ export default class App extends React.Component {
     }
 
     getHash() {
-        const encoded = this.state.operations.map((el) => {
-            return this.encodeOp(el[0], el[1]);
+        const encoded = this.operations.map((el) => {
+            return Ops.encodeOp(el[0], el[1]);
         }).join('');
 
         let hash = '#s=' + encoded;
@@ -165,8 +167,8 @@ export default class App extends React.Component {
     }
 
     playAll() {
-        const numOperations = this.state.operations.length;
-        const lastTime = this.state.operations[this.state.operations.length - 1][1] * C.TIME_RESOLUTION_DIVISOR;
+        const numOperations = this.operations.length;
+        const lastTime = this.operations[this.operations.length - 1][1] * C.TIME_RESOLUTION_DIVISOR;
         const startTime = (new Date).getTime();
         let numPerformed = 0;
 
@@ -177,7 +179,7 @@ export default class App extends React.Component {
             });
         }, 20);
 
-        this.state.operations.forEach((el) => {
+        this.operations.forEach((el) => {
             // relying on the timer is awful, but Piano's "time" arguments just don't work.
             this.playAllIntervals.push(
                 setTimeout(() => {
@@ -230,12 +232,12 @@ export default class App extends React.Component {
 
         // TODO ugh, DOM read
         if (target.classList.contains('active')) {
-            op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+            op = Ops.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
             this.addOperation(op, e.timeStamp);
             this.performOperation(op);
         }
 
-        op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
+        op = Ops.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
 
         this.addOperation(op, e.timeStamp);
 
@@ -243,7 +245,7 @@ export default class App extends React.Component {
 
         this.keyTimeouts['z' + note] = setTimeout(() => {
             if (this.keyTimeouts['z' + note]) {
-                op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+                op = Ops.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
                 this.addOperation(op, e.timeStamp + 1000);
                 this.performOperation(op);
             }
@@ -278,9 +280,8 @@ export default class App extends React.Component {
         }
     }
 
-    addOperation(op, timeInMs, after) {
+    addOperation(op, timeInMs) {
         if (this.state.playState !== C.NEW_RECORDING) {
-            after && after();
             return;
         }
 
@@ -289,53 +290,17 @@ export default class App extends React.Component {
             this.firstTime = timeInMs;
         }
 
+        this.operations.push([op, (timeInMs - this.firstTime)]);
+
         this.setState({
-            operations: this.state.operations.concat([[op, (timeInMs - this.firstTime)]])
-        }, () => {
-            after && after();
+            hasOperations: true
         });
-    }
-
-    encodeOp(op, time) {
-        return [
-            String.fromCharCode(op[0] + C.ORD_A_UPPER),
-            op[1].toString(16),
-            Math.round(time).toString(36)
-        ].join('');
-    }
-
-    decodeOp(token) {
-        const command = token[0].charCodeAt(0) - C.ORD_A_UPPER;
-        const note = parseInt(token.substr(1, 2), 16);
-        const time = parseInt(token.substr(3), 36);
-        const op = [command, note];
-        return [op, time];
-    }
-
-    operationFromMidi(data) {
-        const op = data[0];
-        const note = data[1];
-        const velocity = data[2];
-
-        if (op === C.MIDI0_PEDAL && note === C.MIDI1_PEDAL) {
-            return (velocity > 0) ? [C.OP_PEDAL_DOWN, 0] : [C.OP_PEDAL_UP, 0];
-
-        } else if (op === C.MIDI0_NOTE_OFF || velocity === C.MIDI2_RELEASE_VELOCITY) {
-            if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
-                return [C.OP_NOTE_UP, note];
-            }
-
-        } else if (op === C.MIDI0_NOTE_ON) {
-            if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
-                return [C.OP_NOTE_DOWN, note];
-            }
-        }
     }
 
     render() {
         return (
             <div>
-                <h1 className={this.state.operations.length ? '' : 'unsaved'}>
+                <h1 className={this.operations.length ? '' : 'unsaved'}>
                     “{this.state.title ? this.state.title : C.DEFAULT_TITLE }”
                 </h1>
                 <Keyboard
@@ -345,7 +310,7 @@ export default class App extends React.Component {
                 <section>
                     <Controls
                         playState={this.state.playState}
-                        hasOperations={this.state.operations.length > 0}
+                        hasOperations={this.state.hasOperations}
                         handleReset={this.handleReset}
                         handleStop={this.handleStop}
                         handlePlay={this.handlePlay}
