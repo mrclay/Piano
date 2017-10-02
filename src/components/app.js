@@ -27,6 +27,7 @@ export default class App extends React.Component {
         this.handleStop = this.handleStop.bind(this);
         this.handleRecord = this.handleRecord.bind(this);
         this.handleTitleChange = this.handleTitleChange.bind(this);
+        this.handleKey = this.handleKey.bind(this);
     }
 
     componentDidMount() {
@@ -54,65 +55,7 @@ export default class App extends React.Component {
             });
         }
 
-        this.initEvents();
-
         this.piano.load(C.RAWGIT_URL).then(this.init.bind(this));
-    }
-
-    // TODO get rid of this completely
-    initEvents() {
-        window.addEventListener('click', (e) => {
-            let target = e.target;
-
-            if (target.parentNode.nodeName === 'BUTTON') {
-                target = target.parentNode;
-            }
-
-            if (!target.dataset.note) {
-                return;
-            }
-
-            // TODO move to Key??
-            e.preventDefault();
-            const note = parseInt(target.dataset.note);
-            let op;
-
-            if (this.keyTimeouts['z' + note]) {
-                clearTimeout(this.keyTimeouts['z' + note]);
-                delete this.keyTimeouts['z' + note];
-            }
-
-            if (target.classList.contains('active')) {
-                op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-
-                // TODO this needs to be async :/
-                this.addOperation(op, e.timeStamp);
-
-                // TODO this needs to be async :/
-                this.performOperation(op);
-            }
-
-            op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
-
-            // TODO this needs to be async :/
-            this.addOperation(op, e.timeStamp);
-
-            // TODO this needs to be async :/
-            this.performOperation(op);
-
-            this.keyTimeouts['z' + note] = setTimeout(() => {
-                if (this.keyTimeouts['z' + note]) {
-                    op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-
-                    // TODO this needs to be async :/
-                    this.addOperation(op, e.timeStamp + 1000);
-
-                    this.performOperation(op);
-                }
-            }, 1000);
-
-            return false;
-        });
     }
 
     handlePlay() {
@@ -151,12 +94,6 @@ export default class App extends React.Component {
 
         this.setState(newComponentState, () => {
             this.setPlayState(C.STOPPED);
-        });
-    }
-
-    handleTitleChange(e) {
-        this.setState({
-            title: e.target.value
         });
     }
 
@@ -262,6 +199,66 @@ export default class App extends React.Component {
         this.setPlayState(C.NEW_RECORDING);
     }
 
+    handleTitleChange(e) {
+        this.setState({
+            title: e.target.value
+        });
+    }
+
+    handleKey(e) {
+        e.persist();
+
+        let target = e.target;
+
+        if (target.parentNode.nodeName === 'BUTTON') {
+            target = target.parentNode;
+        }
+
+        if (!target.dataset.note) {
+            return;
+        }
+
+        e.preventDefault();
+        const note = parseInt(target.dataset.note);
+        let op;
+
+        if (this.keyTimeouts['z' + note]) {
+            clearTimeout(this.keyTimeouts['z' + note]);
+            delete this.keyTimeouts['z' + note];
+        }
+
+        if (target.classList.contains('active')) {
+            op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+
+            // TODO this needs to be async :/
+            this.addOperation(op, e.timeStamp);
+
+            // TODO this needs to be async :/
+            this.performOperation(op);
+        }
+
+        op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
+
+        // TODO this needs to be async :/
+        this.addOperation(op, e.timeStamp);
+
+        // TODO this needs to be async :/
+        this.performOperation(op);
+
+        this.keyTimeouts['z' + note] = setTimeout(() => {
+            if (this.keyTimeouts['z' + note]) {
+                op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+
+                // TODO this needs to be async :/
+                this.addOperation(op, e.timeStamp + 1000);
+
+                this.performOperation(op);
+            }
+        }, 1000);
+
+        return false;
+    }
+
     performOperation(op, after) {
         switch (op[0]) {
             case C.OP_PEDAL_DOWN:
@@ -350,6 +347,7 @@ export default class App extends React.Component {
                 </h1>
                 <Keyboard
                     actives={[]}
+                    handleKey={this.handleKey}
                 />
                 <section>
                     <Controls

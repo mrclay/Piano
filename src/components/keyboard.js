@@ -43,7 +43,7 @@ export default class Keyboard extends React.Component {
         }
 
         return (
-            <div id="piano">
+            <div onClick={this.props.handleKey} id="piano">
                 <div className="white">{whites}</div>
                 <div className="black">{blacks}</div>
             </div>
