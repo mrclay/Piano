@@ -46,7 +46,7 @@ export default class App extends React.Component {
                             return this.reset();
                         }
 
-                        const op = this.operationFromMidi(e.data);
+                        const op = Ops.operationFromMidi(e.data);
                         if (!op) {
                             return;
                         }
