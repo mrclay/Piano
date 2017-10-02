@@ -20,6 +20,7 @@ export default class App extends React.Component {
         this.keyTimeouts = {};
         this.playAllIntervals = [];
         this.progressInterval;
+        this.$one = document.querySelector.bind(document);
 
         this.handleSave = this.handleSave.bind(this);
         this.handleReset = this.handleReset.bind(this);
@@ -136,11 +137,12 @@ export default class App extends React.Component {
             clearInterval(this.progressInterval);
         }
         this.playAllIntervals.forEach(clearTimeout);
-        // $all('[data-note].active').forEach((el) => {
-        //     const note = parseInt(el.dataset.note, 10);
-        //     this.piano.keyUp(note);
-        //     el.classList.remove('active');
-        // });
+
+        // DOM write!
+        document.querySelectorAll('[data-note].active').forEach((el) => {
+            el.classList.remove('active');
+        });
+
         this.playAllIntervals = [];
     }
 
@@ -179,12 +181,11 @@ export default class App extends React.Component {
             // relying on the timer is awful, but Piano's "time" arguments just don't work.
             this.playAllIntervals.push(
                 setTimeout(() => {
-                        this.performOperation(el[0], () => {
-                            numPerformed++;
-                            if (numPerformed === numOperations) {
-                                this.setPlayState(C.STOPPED);
-                            }
-                        });
+                        this.performOperation(el[0]);
+                        numPerformed++;
+                        if (numPerformed === numOperations) {
+                            this.setPlayState(C.STOPPED);
+                        }
                     },
                     el[1] * C.TIME_RESOLUTION_DIVISOR
                 )
@@ -227,31 +228,23 @@ export default class App extends React.Component {
             delete this.keyTimeouts['z' + note];
         }
 
+        // TODO ugh, DOM read
         if (target.classList.contains('active')) {
             op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-
-            // TODO this needs to be async :/
             this.addOperation(op, e.timeStamp);
-
-            // TODO this needs to be async :/
             this.performOperation(op);
         }
 
         op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
 
-        // TODO this needs to be async :/
         this.addOperation(op, e.timeStamp);
 
-        // TODO this needs to be async :/
         this.performOperation(op);
 
         this.keyTimeouts['z' + note] = setTimeout(() => {
             if (this.keyTimeouts['z' + note]) {
                 op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-
-                // TODO this needs to be async :/
                 this.addOperation(op, e.timeStamp + 1000);
-
                 this.performOperation(op);
             }
         }, 1000);
@@ -259,28 +252,28 @@ export default class App extends React.Component {
         return false;
     }
 
-    performOperation(op, after) {
+    performOperation(op) {
         switch (op[0]) {
             case C.OP_PEDAL_DOWN:
-                after && after();
                 return this.piano.pedalDown();
 
             case C.OP_PEDAL_UP:
-                after && after();
                 return this.piano.pedalUp();
 
             case C.OP_NOTE_DOWN:
                 this.piano.keyDown(op[1]);
-                // TODO activate key by setting state
-                //$one('[data-note="' + op[1] + '"]').classList.add('active');
-                after && after();
+
+                // DOM write!
+                this.$one('[data-note="' + op[1] + '"]').classList.add('active');
+
                 return;
 
             case C.OP_NOTE_UP:
                 this.piano.keyUp(op[1]);
-                // TODO deactivate key by setting state
-                //$one('[data-note="' + op[1] + '"]').classList.remove('active');
-                after && after();
+
+                // DOM write!
+                this.$one('[data-note="' + op[1] + '"]').classList.remove('active');
+
                 return;
         }
     }
