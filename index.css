@@ -52,7 +52,8 @@ h1.unsaved {
 	background: #000;
 	color: #fff;
 }
-[data-note].active {
+.white > a.active,
+.black > a.active {
 	background: #74c674;
 }
 
