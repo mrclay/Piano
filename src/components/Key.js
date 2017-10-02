@@ -15,7 +15,7 @@ export default class Key extends React.Component {
         }
         const className = this.props.active ? 'active' : '';
         return (
-                <a href="#" className={className} style={style}></a>
+                <a href="#" data-note={note} className={className} style={style}></a>
         );
     }
 }

@@ -12,7 +12,7 @@ class App extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-            title: 'Untitled',
+            title: C.INITIAL_TITLE,
             playState: C.NEW_RECORDING,
 			progress: 0,
             firstTime: null,
@@ -37,7 +37,7 @@ class App extends React.Component {
                             return this.reset();
                         }
 
-                        const op = operationFromMidi(e.data);
+                        const op = this.operationFromMidi(e.data);
                         if (!op) {
                             return;
                         }
@@ -49,7 +49,87 @@ class App extends React.Component {
             });
         }
 
+        this.initEvents();
+
         piano.load(C.RAWGIT_URL).then(this.init.bind(this));
+	}
+
+	initEvents() {
+        // TODO re-do
+    	window.addEventListener('click', (e) => {
+            let target = e.target;
+
+            if (target.parentNode.nodeName === 'BUTTON') {
+                target = target.parentNode;
+            }
+
+            if (target.dataset.note) {
+                e.preventDefault();
+                const note = parseInt(target.dataset.note);
+                let op;
+
+                if (this.keyTimeouts['z' + note]) {
+                    clearTimeout(this.keyTimeouts['z' + note]);
+                    delete this.keyTimeouts['z' + note];
+                }
+
+                if (target.classList.contains('active')) {
+                    op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+
+                    // TODO this needs to be async :/
+                    this.addOperation(op, e.timeStamp);
+
+                    // TODO this needs to be async :/
+                    this.performOperation(op);
+                }
+
+                op = this.operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
+
+                // TODO this needs to be async :/
+                this.addOperation(op, e.timeStamp);
+
+                // TODO this needs to be async :/
+                this.performOperation(op);
+
+                this.keyTimeouts['z' + note] = setTimeout(() => {
+                    if (this.keyTimeouts['z' + note]) {
+                        op = this.operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
+
+                        // TODO this needs to be async :/
+                        this.addOperation(op, e.timeStamp + 1000);
+
+                        this.performOperation(op);
+                    }
+                }, 1000);
+
+                return false;
+            }
+
+            if (target.id === 'play') {
+                this.setPlayState(C.PLAYING);
+                return false;
+            }
+
+            if (target.id === 'stop') {
+                this.setPlayState(C.STOPPED);
+                return false;
+            }
+
+            if (target.id === 'record') {
+                this.setPlayState(C.NEW_RECORDING);
+                return false;
+            }
+
+            if (target.id === 'save') {
+                this.save();
+                return false;
+            }
+
+            if (target.id === 'reset') {
+                this.reset();
+                return false;
+            }
+        });
 	}
 
     init() {
@@ -62,21 +142,21 @@ class App extends React.Component {
         const title = m[2] ? decodeURIComponent(m[2]) : '';
         const pattern = /[A-Z][a-z0-9]+/g;
         let token;
-        let operations = this.state.operations.slice();
+        let newComponentState = {
+        	operations: this.state.operations.slice(),
+			title
+		};
 
         while (token = pattern.exec(streamEncoded)) {
-            let opTime = decodeOp(token[0]);
+            let opTime = this.decodeOp(token[0]);
 
-            firstTime = 0;
-            operations.push([opTime[0], opTime[1]]);
+            newComponentState.firstTime = 0;
+            newComponentState.operations.push([opTime[0], opTime[1]]);
         }
 
-        this.setState({
-			operations,
-			title
-		})
-
-        this.setPlayState(C.STOPPED);
+        this.setState(newComponentState, () => {
+            this.setPlayState(C.STOPPED);
+		});
     }
 
     setPlayState(newState, after) {
@@ -95,6 +175,7 @@ class App extends React.Component {
             case C.NEW_RECORDING:
                 newComponentState.operations = [];
                 newComponentState.firstTime = undefined;
+                newComponentState.title = C.INITIAL_TITLE;
                 break;
 
             case C.STOPPED:
@@ -127,7 +208,7 @@ class App extends React.Component {
 
     getHash() {
         const encoded = this.state.operations.map((el) => {
-            return encodeOp(el[0], el[1]);
+            return this.encodeOp(el[0], el[1]);
         }).join('');
 
         let hash = '#s=' + encoded;
@@ -180,12 +261,7 @@ class App extends React.Component {
         this.stopAll();
         location.hash = '#';
         this.firstTime = undefined;
-        this.setState({
-			operations: [],
-			title: '',
-		}, () => {
-            this.setPlayState(C.NEW_RECORDING);
-		});
+        this.setPlayState(C.NEW_RECORDING);
     }
 
     performOperation(op) {
@@ -215,15 +291,51 @@ class App extends React.Component {
         }
 
         timeInMs = Math.round(timeInMs / C.TIME_RESOLUTION_DIVISOR);
-        if (firstTime === undefined) {
-            firstTime = timeInMs;
+        if (this.firstTime === undefined) {
+            this.firstTime = timeInMs;
         }
 
         this.setState({
-			operations: this.state.operations.concat([[op, (timeInMs - firstTime)]])
+			operations: this.state.operations.concat([[op, (timeInMs - this.firstTime)]])
 		}, () => {
             after && after();
 		});
+    }
+
+    encodeOp(op, time) {
+        return [
+            String.fromCharCode(op[0] + C.ORD_A_UPPER),
+            op[1].toString(16),
+            Math.round(time).toString(36)
+        ].join('');
+    }
+
+    decodeOp(token) {
+        const command = token[0].charCodeAt(0) - C.ORD_A_UPPER;
+        const note = parseInt(token.substr(1, 2), 16);
+        const time = parseInt(token.substr(3), 36);
+        const op = [command, note];
+        return [op, time];
+    }
+
+    operationFromMidi(data) {
+        const op = data[0];
+        const note = data[1];
+        const velocity = data[2];
+
+        if (op === C.MIDI0_PEDAL && note === C.MIDI1_PEDAL) {
+            return (velocity > 0) ? [C.OP_PEDAL_DOWN, 0] : [C.OP_PEDAL_UP, 0];
+
+        } else if (op === C.MIDI0_NOTE_OFF || velocity === C.MIDI2_RELEASE_VELOCITY) {
+            if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
+                return [C.OP_NOTE_UP, note];
+            }
+
+        } else if (op === C.MIDI0_NOTE_ON) {
+            if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
+                return [C.OP_NOTE_DOWN, note];
+            }
+        }
     }
 
     render() {
@@ -262,104 +374,5 @@ ReactDOM.render(
 
 window.logMidi = false;
 
-function encodeOp(op, time) {
-	return [
-		String.fromCharCode(op[0] + C.ORD_A_UPPER),
-		op[1].toString(16),
-		Math.round(time).toString(36)
-	].join('');
-}
-
-function decodeOp(token) {
-	const command = token[0].charCodeAt(0) - C.ORD_A_UPPER;
-	const note = parseInt(token.substr(1, 2), 16);
-	const time = parseInt(token.substr(3), 36);
-	const op = [command, note];
-	return [op, time];
-}
-
-function operationFromMidi(data) {
-	const op = data[0];
-	const note = data[1];
-	const velocity = data[2];
-
-	if (op === C.MIDI0_PEDAL && note === C.MIDI1_PEDAL) {
-		return (velocity > 0) ? [C.OP_PEDAL_DOWN, 0] : [C.OP_PEDAL_UP, 0];
-
-	} else if (op === C.MIDI0_NOTE_OFF || velocity === C.MIDI2_RELEASE_VELOCITY) {
-		if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
-			return [C.OP_NOTE_UP, note];
-		}
-
-	} else if (op === C.MIDI0_NOTE_ON) {
-		if (note >= C.RANGE[0] && note <= C.RANGE[1]) {
-			return [C.OP_NOTE_DOWN, note];
-		}
-	}
-}
-
-window.addEventListener('click', (e) => {
-	let target = e.target;
-
-	if (target.parentNode.nodeName === 'BUTTON') {
-		target = target.parentNode;
-	}
-
-	if (target.dataset.note) {
-		e.preventDefault();
-		const note = parseInt(target.dataset.note);
-		let op;
-
-		if (keyTimeouts['z' + note]) {
-			clearTimeout(keyTimeouts['z' + note]);
-			delete keyTimeouts['z' + note];
-		}
-
-		if (target.classList.contains('active')) {
-			op = operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-			addOperation(op, e.timeStamp);
-			performOperation(op);
-		}
-
-		op = operationFromMidi([C.MIDI0_NOTE_ON, note, 254]);
-		addOperation(op, e.timeStamp);
-		performOperation(op);
-
-		keyTimeouts['z' + note] = setTimeout(() => {
-			if (keyTimeouts['z' + note]) {
-				op = operationFromMidi([C.MIDI0_NOTE_OFF, note, 0]);
-				addOperation(op, e.timeStamp + 1000);
-				performOperation(op);
-			}
-		}, 1000);
-
-		return false;
-	}
-
-	if (target.id === 'play') {
-		setState(C.PLAYING);
-		return false;
-	}
-
-	if (target.id === 'stop') {
-		setState(C.STOPPED);
-		return false;
-	}
-
-	if (target.id === 'record') {
-		setState(C.NEW_RECORDING);
-		return false;
-	}
-
-	if (target.id === 'save') {
-		save();
-		return false;
-	}
-
-	if (target.id === 'reset') {
-		reset();
-		return false;
-	}
-});
 
 console.log('To log MIDI messages: logMidi = true');

@@ -26,3 +26,5 @@ export const MIDI1_PEDAL = 64;
 export const MIDI1_TUNE = 10;
 
 export const MIDI2_RELEASE_VELOCITY = 0;
+
+export const INITIAL_TITLE = 'Untitled';
